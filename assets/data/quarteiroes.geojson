@@ -1,0 +1,338 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_1",
+        "nome": "praca_centro",
+        "ruas": [
+          "harrison jose borge",
+          "francisco albuquerque",
+          "av capitao indio bandeira",
+          "av irmaos pereira"
+        ],
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3772141,
+              -24.0430793
+            ],
+            [
+              -52.3790351,
+              -24.044415
+            ],
+            [
+              -52.3779308,
+              -24.0455503
+            ],
+            [
+              -52.3761318,
+              -24.0442013
+            ],
+            [
+              -52.3772141,
+              -24.0430793
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_2",
+        "nome": "rua_brasil",
+        "ruas": [
+          "av jose custodio de oliveira",
+          "harrison jose borges",
+          "francisco albuquerque",
+          "av irmaos pereira"
+        ],
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3760459,
+              -24.044331
+            ],
+            [
+              -52.3777867,
+              -24.0456535
+            ],
+            [
+              -52.3768212,
+              -24.0467741
+            ],
+            [
+              -52.3749827,
+              -24.0454063
+            ],
+            [
+              -52.3760459,
+              -24.044331
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_3",
+        "nome": "rua_brasil_2",
+        "carros_estacionados": 0,
+        "ruas": [
+          "francisco albuquerque",
+          "av capitao indio bandeira",
+          "harrison jose borges",
+          "av manoel mendes de camargo"
+        ]
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3783512,
+              -24.0418081
+            ],
+            [
+              -52.3801096,
+              -24.0431328
+            ],
+            [
+              -52.3790304,
+              -24.0442417
+            ],
+            [
+              -52.3773437,
+              -24.0429073
+            ],
+            [
+              -52.3783512,
+              -24.0418081
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_4",
+        "nome": "rua_saopaulo",
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3765247,
+              -24.0403869
+            ],
+            [
+              -52.3782957,
+              -24.0417633
+            ],
+            [
+              -52.3772521,
+              -24.0428486
+            ],
+            [
+              -52.3754944,
+              -24.0414999
+            ],
+            [
+              -52.3765247,
+              -24.0403869
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_5",
+        "nome": "rua_saopaulo_2",
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3754008,
+              -24.0416717
+            ],
+            [
+              -52.3771539,
+              -24.0429847
+            ],
+            [
+              -52.3760619,
+              -24.0441096
+            ],
+            [
+              -52.3742916,
+              -24.0428073
+            ],
+            [
+              -52.3754008,
+              -24.0416717
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_5",
+        "nome": "rua_saopaulo_3",
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.374193,
+              -24.042949
+            ],
+            [
+              -52.3759926,
+              -24.044265
+            ],
+            [
+              -52.374952,
+              -24.0453312
+            ],
+            [
+              -52.3731948,
+              -24.0440376
+            ],
+            [
+              -52.374193,
+              -24.042949
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_6",
+        "nome": "rua_araruna",
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3801446,
+              -24.0431812
+            ],
+            [
+              -52.3818841,
+              -24.0445204
+            ],
+            [
+              -52.3808219,
+              -24.0457009
+            ],
+            [
+              -52.3790953,
+              -24.044341
+            ],
+            [
+              -52.3801446,
+              -24.0431812
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_7",
+        "nome": "rua_araruna_2",
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3790399,
+              -24.0444861
+            ],
+            [
+              -52.3807345,
+              -24.0457532
+            ],
+            [
+              -52.3797324,
+              -24.0468491
+            ],
+            [
+              -52.3779726,
+              -24.045586
+            ],
+            [
+              -52.3790399,
+              -24.0444861
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "cm_centro_8",
+        "nome": "rua_araruna_3",
+        "carros_estacionados": 0
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -52.3778433,
+              -24.0456957
+            ],
+            [
+              -52.3796114,
+              -24.0470415
+            ],
+            [
+              -52.3786196,
+              -24.048155
+            ],
+            [
+              -52.3768782,
+              -24.0468288
+            ],
+            [
+              -52.3778433,
+              -24.0456957
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
