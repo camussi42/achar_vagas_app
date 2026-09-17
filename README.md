@@ -22,7 +22,6 @@ Prof.° Reginaldo Ré
 
 ## docker - ambiente de desenvolvimento (informal)
 
-quer rodar o projeto rápido em dev usando docker? segue o passo a passo bem direto, tudo em minúsculas e sem frescura:
 
 - constrói e sobe os serviços (flutter web + emulador do firebase):
 
@@ -41,6 +40,4 @@ docker-compose up --build
 	- parar: ctrl+c no terminal ou `docker-compose down`
 	- se mudar dependências e quiser forçar rebuild: `docker-compose up --build --force-recreate`
 	- caso o container flutter abra problemas, rode `flutter pub get` localmente ou inspecione os logs do container
-
-se quiser, eu removo o README-docker.md e deixo só essa seção ou adiciono instruções específicas pra android/ios. fala o que prefere.
 
