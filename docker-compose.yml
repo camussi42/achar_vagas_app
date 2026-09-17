@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  firebase:
+    build:
+      context: .
+      dockerfile: docker/firebase/Dockerfile
+    volumes:
+      - ./:/workspace
+      - ./emulator-data:/workspace/emulator-data
+    ports:
+      - "8080:8080"
+      - "9099:9099"
+      - "4000:4000"
+  flutter:
+    build:
+      context: .
+      dockerfile: docker/flutter/Dockerfile
+    volumes:
+      - ./:/app
+      - /app/.pub-cache
+    ports:
+      - "5000:5000"
+    environment:
+      - PUB_HOSTED_URL=https://pub.dev
+    depends_on:
+      - firebase
+    stdin_open: true
+    tty: true
