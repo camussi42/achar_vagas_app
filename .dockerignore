@@ -1,0 +1,12 @@
+.git
+build
+.gradle
+.dart_tool
+.pub-cache
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+android/.gradle
+**/build
+pubspec.lock
+node_modules
