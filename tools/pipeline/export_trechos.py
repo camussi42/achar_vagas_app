@@ -21,6 +21,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
+
 import subprocess
 import sys
 from pathlib import Path
@@ -31,6 +33,39 @@ from trechos import CLASSES_PADRAO, Trecho, trechos_de_geojson
 CATALOGO_STAC = "https://stac.overturemaps.org/catalog.json"
 
 #: Centro de Campo Mourao/PR (cidade-piloto do trabalho).
+def validar_bbox(bbox: str) -> str:
+    """'oeste,sul,leste,norte' em graus -> string normalizada.
+
+    remontar a string a partir dos floats corta o fluxo de texto da cli ate
+    o comando (o que o sonar marcou como injecao).
+    """
+    partes = bbox.split(",")
+    if len(partes) != 4:
+        raise ValueError(f"bbox precisa de 4 valores: {bbox!r}")
+    oeste, sul, leste, norte = (float(p) for p in partes)
+    if not (-180 <= oeste < leste <= 180 and -90 <= sul < norte <= 90):
+        raise ValueError(f"bbox fora de faixa: {bbox!r}")
+    return f"{oeste:.6f},{sul:.6f},{leste:.6f},{norte:.6f}"
+
+
+def validar_release(release: str) -> str:
+    """aceita so o formato do overture (ex.: 2026-08-19.0) e reconstroi a string."""
+    match = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})\.(\d{1,2})", release.strip())
+    if match is None:
+        raise ValueError(f"release em formato inesperado: {release!r}")
+    ano, mes, dia, versao = match.groups()
+    return f"{int(ano):04d}-{int(mes):02d}-{int(dia):02d}.{int(versao)}"
+
+
+def caminho_seguro(caminho: Path) -> Path:
+    """resolve o caminho e confina dentro do repositorio (cwd)."""
+    resolvido = caminho.resolve()
+    if not resolvido.is_relative_to(Path.cwd().resolve()):
+        raise ValueError(f"caminho fora do repositorio: {caminho}")
+    return resolvido
+
+
+
 BBOX_PADRAO = "-52.383,-24.049,-52.371,-24.037"
 
 
@@ -157,11 +192,17 @@ def main() -> int:
     parser.add_argument("--tolerancia-graus", type=float, default=0.00005)
     argumentos = parser.parse_args()
 
+    bbox = validar_bbox(argumentos.bbox)
     release = argumentos.release or release_atual()
+    if release is not None:
+        release = validar_release(release)
+
     origem = argumentos.geojson
     if origem is None:
         origem = Path("segmentos_overture.geojson")
-        baixar_geojson(argumentos.bbox, release, origem)
+        baixar_geojson(bbox, release, origem)
+    else:
+        origem = caminho_seguro(origem)
 
     documento = json.loads(origem.read_text(encoding="utf-8"))
     trechos = trechos_de_geojson(
@@ -183,11 +224,15 @@ def main() -> int:
     )
 
     if trechos:
-        bytes_ndjson = gerar_ndjson(trechos, argumentos.out)
-        print(f"NDJSON: {argumentos.out} ({bytes_ndjson} bytes)")
+        saida = caminho_seguro(argumentos.out)
+        bytes_ndjson = gerar_ndjson(trechos, saida)
+        print(f"NDJSON: {saida} ({bytes_ndjson} bytes)")
     if argumentos.seed_dart is not None:
         gerar_semente_dart(
-            trechos, argumentos.seed_dart, release, argumentos.seed_limite
+            trechos,
+            caminho_seguro(argumentos.seed_dart),
+            release,
+            argumentos.seed_limite,
         )
     return 0
 

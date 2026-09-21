@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import re
 import unittest
+from pathlib import Path
 
+import export_trechos
 import geohash
 import trechos
 
@@ -22,6 +24,34 @@ PADRAO_TRECHO_ID = re.compile(
     r"^(gers:([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
     r"(@[0-9.]+:[0-9.]+)?|gh:[0-9a-z]{6,9})$"
 )
+
+
+class ValidacaoEntradaTest(unittest.TestCase):
+    def test_bbox_valido_normaliza(self):
+        self.assertEqual(
+            export_trechos.validar_bbox("-52.383,-24.049,-52.371,-24.037"),
+            "-52.383000,-24.049000,-52.371000,-24.037000",
+        )
+
+    def test_bbox_rejeita_lixo_e_faixa_errada(self):
+        for ruim in ("abc", "1,2,3", "-1,-2,999,0", "-52, -24, -51, 999", "a,b,c,d"):
+            with self.assertRaises(ValueError):
+                export_trechos.validar_bbox(ruim)
+
+    def test_release_valida_faz_roundtrip(self):
+        self.assertEqual(export_trechos.validar_release("2026-08-19.0"), "2026-08-19.0")
+        self.assertEqual(export_trechos.validar_release(" 2026-08-19.0 "), "2026-08-19.0")
+
+    def test_release_rejeita_formato_estranho(self):
+        for ruim in ("2026-08-19", "abc", "2026-08-19; rm -rf /", "1.0"):
+            with self.assertRaises(ValueError):
+                export_trechos.validar_release(ruim)
+
+    def test_caminho_seguro_confina_no_repositorio(self):
+        dentro = export_trechos.caminho_seguro(Path("saida.ndjson"))
+        self.assertTrue(dentro.is_absolute())
+        with self.assertRaises(ValueError):
+            export_trechos.caminho_seguro(Path("../fora.ndjson"))
 
 
 def feature(
