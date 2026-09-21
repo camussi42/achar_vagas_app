@@ -41,3 +41,9 @@ docker-compose up --build
 	- se mudar dependências e quiser forçar rebuild: `docker-compose up --build --force-recreate`
 	- caso o container flutter abra problemas, rode `flutter pub get` localmente ou inspecione os logs do container
 
+## regras do firestore
+
+- `firestore.rules`:
+	- `trechos`: leitura liberada para o cliente, escrita negada (quem grava é a pipeline, via Admin SDK)
+	- `relatos`: `uid` do próprio usuário, `tipo` conhecido, `geo.geopoint` como geopoint e `criadoEm == request.time` (servidor)
+	- o formato do `trechoId` é o **mesmo texto** no app (`lib/geo/trecho_id.dart`), nas regras (função `trechoIdValido`) e na pipeline (`tools/pipeline/trechos.py`); o teste de contrato falha se algum dos três mudar sozinho

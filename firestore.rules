@@ -1,13 +1,47 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Formato canonico do trechoId (mesmo texto usado no app e na pipeline).
+    //
+    // O texto abaixo e IDENTICO ao de:
+    //   app      -> lib/geo/trecho_id.dart      (TrechoId.padraoRegex)
+    //   pipeline -> tools/pipeline/trechos.py   (PADRAO_TRECHO_ID)
+    //
+    // O teste de contrato em tools/pipeline/test_pipeline.py le os tres arquivos
+    // e falha se qualquer um divergir. As ancoras ^ e $ ficam explicitas porque
+    // matches() aceita o padrao em qualquer posicao da string.
+    function trechoIdValido(id) {
+      return id is string && id.matches('^(gers:([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(@[0-9.]+:[0-9.]+)?|gh:[0-9a-z]{6,9})$');
+    }
+
+    // Base viaria global (Overture Maps / ids GERS).
+    //
+    // Quem escreve e a pipeline (tools/pipeline/semear_firestore.py) usando o
+    // Admin SDK, que ignora estas regras. O cliente so le: assim a geometria e o
+    // nome da via nao podem ser forjados por um usuario.
+    match /trechos/{trechoId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Relatos: a unica colecao em que o cliente escreve.
     match /relatos/{id} {
       allow read: if request.auth != null;
+
       allow create: if request.auth != null
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.trechoId is string
-        && request.resource.data.tipo in ['vaga', 'lotado', 'saindo'];
+        && trechoIdValido(request.resource.data.trechoId)
+        && request.resource.data.tipo in ['vaga', 'lotado', 'saindo']
+        && request.resource.data.geo is map
+        && request.resource.data.geo.geopoint is latlng
+        && request.resource.data.geo.geohash is string
+        && request.resource.data.geo.geohashConsulta is string
+        // FieldValue.serverTimestamp(): o horario e sempre do servidor.
+        && request.resource.data.criadoEm == request.time;
+
       allow update, delete: if false;
     }
   }
 }
+

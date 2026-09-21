@@ -7,6 +7,10 @@ Rodar:
 Os valores de geohash sao os mesmos usados em `test/geohash_test.dart`, gerados
 por uma implementacao independente (`pygeohash`). Se Python e Dart divergirem, o
 indice gravado pela pipeline deixa de casar com a consulta do app.
+
+Alem do geohash, aqui ficam os **testes de contrato**: o padrao do `trechoId`
+tem que ser o mesmo no app (`lib/geo/trecho_id.dart`), nas regras do Firestore
+(`firestore.rules`) e na pipeline (`trechos.PADRAO_TRECHO_ID`).
 """
 
 from __future__ import annotations
@@ -19,11 +23,91 @@ import export_trechos
 import geohash
 import trechos
 
-#: Mesmo padrao de `firestore.rules` / `lib/geo/trecho_id.dart` (teste de contrato).
-PADRAO_TRECHO_ID = re.compile(
-    r"^(gers:([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
-    r"(@[0-9.]+:[0-9.]+)?|gh:[0-9a-z]{6,9})$"
-)
+#: Raiz do repositorio (test_pipeline.py -> tools/pipeline -> tools -> repo).
+RAIZ = Path(__file__).resolve().parents[2]
+
+#: Mesmo padrao de `firestore.rules` / `lib/geo/trecho_id.dart` (fonte unica).
+PADRAO_TRECHO_ID = trechos.PADRAO_TRECHO_ID
+
+
+def extrair_padrao_do_app() -> str:
+    """Le o texto literal de `TrechoId.padraoRegex` em lib/geo/trecho_id.dart."""
+    fonte = (RAIZ / "lib" / "geo" / "trecho_id.dart").read_text(encoding="utf-8")
+    corpo = re.search(r"_formatoValido\s*=\s*RegExp\((.*?)\);", fonte, re.S)
+    assert corpo is not None, "nao achei _formatoValido em trecho_id.dart"
+    partes = re.findall(r"r'([^']*)'", corpo.group(1))
+    assert partes, "_formatoValido nao usa literal cru (r'...')"
+    return "".join(partes)
+
+
+def extrair_padrao_das_rules() -> str:
+    """Le o texto literal passado para `matches()` em firestore.rules."""
+    fonte = (RAIZ / "firestore.rules").read_text(encoding="utf-8")
+    corpo = re.search(
+        r"function\s+trechoIdValido\(id\)\s*\{(.*?)\n\s*\}", fonte, re.S
+    )
+    assert corpo is not None, "nao achei a funcao trechoIdValido em firestore.rules"
+    padrao = re.search(r"matches\(\s*'([^']+)'\s*\)", corpo.group(1), re.S)
+    assert padrao is not None, "trechoIdValido sem matches('...')"
+    return padrao.group(1)
+
+
+class ContratoTrechoIdTest(unittest.TestCase):
+    """App, rules e pipeline precisam aceitar exatamente o mesmo id."""
+
+    def test_os_tres_arquivos_usam_o_mesmo_padrao(self):
+        esperado = PADRAO_TRECHO_ID.pattern
+        self.assertEqual(extrair_padrao_do_app(), esperado)
+        self.assertEqual(extrair_padrao_das_rules(), esperado)
+
+    def test_amostras_canonicas_casam_no_padrao(self):
+        for texto in (
+            "gers:c1d70afe-a7de-4b73-a41c-e92526ab72f9",
+            "gers:c1d70afe-a7de-4b73-a41c-e92526ab72f9@0.5000:1.0000",
+            "gers:08628d5437ffffff0473ffc36df547db@0.0000:0.5000",
+            "gh:6gdz0ph",
+        ):
+            self.assertTrue(PADRAO_TRECHO_ID.match(texto), texto)
+
+    def test_ids_inventados_nao_casam_no_padrao(self):
+        for texto in (
+            "gers:xpto",
+            "gers:",
+            "gers:c1d70afe-a7de-4b73-a41c-e92526ab72f9@0.5",
+            "c1d70afe-a7de-4b73-a41c-e92526ab72f9",
+            "gh:abc",
+            "gh:6G DZ0PH",
+            " gers:c1d70afe-a7de-4b73-a41c-e92526ab72f9",
+        ):
+            self.assertIsNone(PADRAO_TRECHO_ID.match(texto), texto)
+
+    def test_gera_id_de_quadra_que_casa_no_padrao(self):
+        conectores = [
+            {"connector_id": "a", "at": 0.0},
+            {"connector_id": "b", "at": 0.5},
+            {"connector_id": "c", "at": 1.0},
+        ]
+        for trecho in trechos.montar_trechos(
+            feature(conectores=conectores), dividir_nos_conectores=True
+        ):
+            self.assertTrue(PADRAO_TRECHO_ID.match(trecho.id), trecho.id)
+
+    def test_rules_negam_escrita_de_cliente_em_trechos(self):
+        fonte = (RAIZ / "firestore.rules").read_text(encoding="utf-8")
+        bloco = re.search(r"match /trechos/\{[^}]+\}\s*\{(.*?)\n\s*\}", fonte, re.S)
+        self.assertIsNotNone(bloco, "firestore.rules sem regra para /trechos")
+        corpo = bloco.group(1)
+        self.assertRegex(corpo, r"allow read:\s*if true;")
+        self.assertRegex(corpo, r"allow write:\s*if false;")
+
+    def test_rules_validam_relato_por_completo(self):
+        fonte = (RAIZ / "firestore.rules").read_text(encoding="utf-8")
+        corpo = fonte.split("match /relatos/", 1)[1]
+        self.assertRegex(corpo, r"uid == request\.auth\.uid")
+        self.assertRegex(corpo, r"trechoIdValido\(request\.resource\.data\.trechoId\)")
+        self.assertRegex(corpo, r"tipo in \['vaga', 'lotado', 'saindo'\]")
+        self.assertRegex(corpo, r"geo\.geopoint is latlng")
+        self.assertRegex(corpo, r"criadoEm == request\.time")
 
 
 class ValidacaoEntradaTest(unittest.TestCase):
@@ -254,7 +338,6 @@ class TrechosDeGeojsonTest(unittest.TestCase):
     def test_exige_feature_collection(self):
         with self.assertRaises(ValueError):
             trechos.trechos_de_geojson({"type": "Feature"})
-
 
 if __name__ == "__main__":
     unittest.main()
