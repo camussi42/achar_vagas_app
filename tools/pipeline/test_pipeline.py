@@ -15,7 +15,9 @@ tem que ser o mesmo no app (`lib/geo/trecho_id.dart`), nas regras do Firestore
 
 from __future__ import annotations
 
+import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -319,6 +321,20 @@ class MontarTrechosTest(unittest.TestCase):
         self.assertTrue(resultado[0].id.endswith("@0.0000:0.5000"))
         self.assertTrue(resultado[1].id.endswith("@0.5000:1.0000"))
 
+    def test_segmento_sem_esquina_no_meio_mantem_a_chave_simples(self):
+        conectores = [
+            {"connector_id": "a", "at": 0.0},
+            {"connector_id": "b", "at": 1.0},
+        ]
+        resultado = trechos.montar_trechos(
+            feature(conectores=conectores), dividir_nos_conectores=True
+        )
+        self.assertEqual(len(resultado), 1)
+        self.assertEqual(
+            resultado[0].id, "gers:c1d70afe-a7de-4b73-a41c-e92526ab72f9"
+        )
+        self.assertFalse(resultado[0].id.endswith(":1.0000"))
+
     def test_aceita_o_id_hex_legado(self):
         resultado = trechos.montar_trechos(
             feature(identificador="08628d5437ffffff0473ffc36df547db")
@@ -339,5 +355,62 @@ class TrechosDeGeojsonTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             trechos.trechos_de_geojson({"type": "Feature"})
 
+class ExportTrechosCliTest(unittest.TestCase):
+    """O export corta cada segmento nos conectores por padrao (lado de quadra)."""
+
+    def test_divide_por_padrao(self):
+        argumentos = export_trechos.criar_parser().parse_args([])
+        self.assertTrue(argumentos.dividir_nos_conectores)
+
+    def test_flag_desliga_a_divisao(self):
+        argumentos = export_trechos.criar_parser().parse_args(
+            ["--nao-dividir-nos-conectores"]
+        )
+        self.assertFalse(argumentos.dividir_nos_conectores)
+
+    def test_flag_antiga_continua_valendo(self):
+        argumentos = export_trechos.criar_parser().parse_args(
+            ["--dividir-nos-conectores"]
+        )
+        self.assertTrue(argumentos.dividir_nos_conectores)
+
+    def test_export_gera_uma_linha_por_lado_de_quadra(self):
+        conectores = [
+            {"connector_id": "a", "at": 0.0},
+            {"connector_id": "esquina", "at": 0.5},
+            {"connector_id": "c", "at": 1.0},
+        ]
+        documento = {
+            "type": "FeatureCollection",
+            "features": [feature(conectores=conectores)],
+        }
+        gerados = trechos.trechos_de_geojson(
+            documento,
+            release="2026-08-19.0",
+            dividir_nos_conectores=True,
+        )
+        self.assertEqual(len(gerados), 2)
+
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "trechos.ndjson"
+            export_trechos.gerar_ndjson(gerados, caminho)
+            linhas = [
+                json.loads(linha)
+                for linha in caminho.read_text(encoding="utf-8").splitlines()
+                if linha
+            ]
+
+        identificador = "c1d70afe-a7de-4b73-a41c-e92526ab72f9"
+        self.assertEqual(
+            sorted(linha["id"] for linha in linhas),
+            [
+                f"gers:{identificador}@0.0000:0.5000",
+                f"gers:{identificador}@0.5000:1.0000",
+            ],
+        )
+        # Lados de quadra distintos: mesmo segmento, faixas (e centroides) diferentes.
+        self.assertNotEqual(linhas[0]["centroide"], linhas[1]["centroide"])
+        for linha in linhas:
+            self.assertTrue(PADRAO_TRECHO_ID.match(linha["id"]), linha["id"])
 if __name__ == "__main__":
     unittest.main()
