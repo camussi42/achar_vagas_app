@@ -24,6 +24,16 @@ ID_UUID = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 )
 
+#: Formato do id do documento gravado em `trechos`.
+#:
+#: MESMO texto de `TrechoId.padraoRegex` (lib/geo/trecho_id.dart) e da funcao
+#: `trechoIdValido` (firestore.rules). O teste de contrato em
+#: `test_pipeline.py` compara os tres arquivos entre si.
+PADRAO_TRECHO_ID = re.compile(
+    r"^(gers:([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+    r"(@[0-9.]+:[0-9.]+)?|gh:[0-9a-z]{6,9})$"
+)
+
 #: Classes viarias que fazem sentido para estacionamento em via publica.
 CLASSES_PADRAO = (
     "residential",
