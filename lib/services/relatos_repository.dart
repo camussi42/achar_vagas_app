@@ -12,7 +12,6 @@ import 'package:achar_vagas_app/geo/geohash.dart';
 import 'package:achar_vagas_app/geo/geo_utils.dart';
 import 'package:achar_vagas_app/geo/trecho_id.dart';
 import 'package:achar_vagas_app/models/relato.dart';
-import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 

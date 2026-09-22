@@ -13,10 +13,6 @@ import 'package:latlong2/latlong.dart';
 /// Precisao do geohash que identifica a area de um trecho aproximado (~150 m).
 const int precisaoGeohashTrecho = 7;
 
-/// Precisao do geohash usado como indice de consulta no Firestore (~1,2 km x
-/// 610 m). Fica gravado em cada documento para permitir `whereIn`.
-const int precisaoGeohashConsulta = 6;
-
 class Trecho {
   const Trecho({
     required this.id,
