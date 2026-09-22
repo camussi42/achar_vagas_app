@@ -1,21 +1,31 @@
+import 'package:achar_vagas_app/ambiente.dart';
 import 'package:achar_vagas_app/bootstrap.dart';
+import 'package:achar_vagas_app/ui/tela_mapa.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final boot = await bootstrapFirebase();
-  runApp(AcharVagasApp(usingFirebase: boot.usingFirebase, uid: boot.uid));
+  runApp(
+    AcharVagasApp(
+      ambiente: boot.usingFirebase
+          ? AmbienteApp.firebase(uid: boot.uid)
+          : AmbienteApp.demonstracao(),
+    ),
+  );
 }
 
 class AcharVagasApp extends StatelessWidget {
-  const AcharVagasApp({
-    super.key,
-    this.usingFirebase = false,
-    this.uid = '',
-  });
+  /// Sem [ambiente] informado o app roda em modo demonstracao: repositorios em
+  /// memoria, semeados com os trechos reais do centro de Campo Mourao.
+  AcharVagasApp({super.key, AmbienteApp? ambiente, this.tileProvider})
+      : ambiente = ambiente ?? AmbienteApp.demonstracao();
 
-  final bool usingFirebase;
-  final String uid;
+  final AmbienteApp ambiente;
+
+  /// Provider de tiles alternativo (testes de widget, sem rede).
+  final TileProvider? tileProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -26,17 +36,7 @@ class AcharVagasApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1565C0)),
         useMaterial3: true,
       ),
-      home: Scaffold(
-        appBar: AppBar(title: const Text('Achar vagas')),
-        body: Center(
-          child: Text(
-            usingFirebase
-                ? 'Firebase ao vivo\nUID: $uid'
-                : 'Firebase ainda não configurado\n(Auth anônimo após flutterfire configure)',
-            textAlign: TextAlign.center,
-          ),
-        ),
-      ),
+      home: TelaMapa(ambiente: ambiente, tileProvider: tileProvider),
     );
   }
 }
