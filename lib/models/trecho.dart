@@ -13,10 +13,6 @@ import 'package:latlong2/latlong.dart';
 /// Precisao do geohash que identifica a area de um trecho aproximado (~150 m).
 const int precisaoGeohashTrecho = 7;
 
-/// Precisao do geohash usado como indice de consulta no Firestore (~1,2 km x
-/// 610 m). Fica gravado em cada documento para permitir `whereIn`.
-const int precisaoGeohashConsulta = 6;
-
 class Trecho {
   const Trecho({
     required this.id,
@@ -117,14 +113,24 @@ class Trecho {
       uf: map['uf'] as String?,
       geometria: geometria,
       centroide: centroide,
-      geohash: (map['geohash'] as String?) ??
-          geohashCodificar(
-            centroide.latitude,
-            centroide.longitude,
-            precisao: precisaoGeohashConsulta,
-          ),
+      geohash: _geohashDoMapa(map, centroide),
       release: map['release'] as String?,
       atualizadoEm: atualizado is String ? DateTime.tryParse(atualizado) : null,
+    );
+  }
+
+  /// Geohash de consulta gravado pela pipeline (`geohashConsulta`).
+  ///
+  /// `geohash` continua aceito por compatibilidade com backups/importacoes
+  /// antigas; quando nenhum dos dois existe, o valor e recalculado a partir do
+  /// centroide — mesma precisao, portanto o mesmo resultado da pipeline.
+  static String _geohashDoMapa(Map<String, dynamic> map, LatLng centroide) {
+    final bruto = map['geohashConsulta'] ?? map['geohash'];
+    if (bruto is String && bruto.isNotEmpty) return bruto;
+    return geohashCodificar(
+      centroide.latitude,
+      centroide.longitude,
+      precisao: precisaoGeohashConsulta,
     );
   }
 

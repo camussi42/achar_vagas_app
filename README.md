@@ -41,6 +41,38 @@ docker-compose up --build
 	- se mudar dependências e quiser forçar rebuild: `docker-compose up --build --force-recreate`
 	- caso o container flutter abra problemas, rode `flutter pub get` localmente ou inspecione os logs do container
 
+## mapa, gps e relatos (issues #3, #12 e #13)
+
+a tela inicial e o mapa (OpenStreetMap via `flutter_map`), centralizado no centro de Campo Mourao:
+
+- zoom e pan no mapa (rotacao desligada) e atribuicao do OSM na tela
+- botao de localizacao: pede a permissao, marca a sua posicao e centraliza o mapa
+- botoes de relato (vaga / lotado / saindo): o app resolve o trecho pela cascata **overture (gers) -> geohash** e grava o relato (colecao `relatos` no Firestore, ou em memoria sem Firebase)
+- estado por trecho: verde = tem vaga, vermelho = lotado, laranja = liberando vaga; relatos valem **20 min** e o mais recente manda
+	- trecho canonico vira **linha** (polyline) com a geometria da base
+	- fallback geohash vira **circulo** no centro da celula de ~150 m
+	- trecho sem relato recente **nao** e pintado (a legenda na tela mostra a cor neutra)
+- a permissao de localizacao e pedida ja na abertura; sem permissao o mapa continua em Campo Mourao e so o botao de localizacao avisa
+
+## modo demonstracao (sem firebase)
+
+sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com os **40 trechos reais** do centro de Campo Mourao (`lib/data/trechos_demo_gerado.dart`) e relatos em memoria: da para navegar e ver as cores funcionando sem nenhum servico externo.
+
+- `lib/ambiente.dart` monta as dependencias (firebase ou demonstracao) e `lib/config.dart` guarda centro, zoom, raios e a URL dos tiles
+- a tela so conversa com as interfaces de `lib/services/`, por isso os testes rodam sem rede, sem GPS e sem Firebase
+
+## como testar o mapa
+
+```bash
+flutter test          # geohash, trechoId, estado por trecho, camadas e tela do mapa
+flutter analyze
+```
+
+- com docker: `docker-compose up --build` e abrir http://localhost:5000
+	- no web o navegador so entrega GPS em contexto seguro (`http://localhost` ou HTTPS)
+	- relatar "tem vaga" no centro: o trecho fica verde por 20 min; relatar "lotado" depois muda a cor (o relato mais recente manda)
+	- em rua fora da malha importada aparece um circulo na area aproximada, em vez de linha
+
 ## regras do firestore
 
 - `firestore.rules`:

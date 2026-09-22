@@ -86,13 +86,25 @@ void main() {
     });
 
     test('rejeita hash fora de 6..9 caracteres do base32', () {
-      for (final invalido in ['ab', '6gdz0p', '6gdz0ph4fx', '6GDZ0PH', '6gdz0p-']) {
+      for (final invalido in ['ab', '6gdz0', '6gdz0ph4fx', '6gdz0p-']) {
         expect(
           () => TrechoId.geohash(invalido),
           throwsFormatException,
           reason: invalido,
         );
       }
+    });
+
+    test('normaliza hash em maiusculas para minusculas', () {
+      // Mesma regra do id GERS: o valor gravado e sempre minusculo, porque as
+      // regras do Firestore e a pipeline so aceitam minusculas.
+      expect(TrechoId.geohash('6GDZ0PH').valor, 'gh:6gdz0ph');
+    });
+
+    test('aceita o limite inferior de 6 caracteres', () {
+      // p6 e a precisao do indice de consulta (`precisaoGeohashConsulta`), entao
+      // o limite inferior do contrato precisa mesmo ser aceito.
+      expect(TrechoId.geohash('6gdz0p').valor, 'gh:6gdz0p');
     });
   });
 
@@ -174,7 +186,7 @@ void main() {
         'gers:$uuid@0.5000',
         'gers:$uuid ',
         ' gers:$uuid',
-        '$uuid',
+        uuid,
         'gh:abc',
         'gh:6gdz0ph4fx',
       ]) {

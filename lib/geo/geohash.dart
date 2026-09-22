@@ -12,6 +12,14 @@ import 'package:latlong2/latlong.dart';
 
 const String _base32 = '0123456789bcdefghjkmnpqrstuvwxyz';
 
+/// Precisao do geohash usado como indice de consulta no Firestore (~1,2 km x
+/// 610 m). Fica gravado em cada documento para permitir `whereIn`.
+///
+/// Mesmo valor da pipeline (`tools/pipeline/geohash.py`,
+/// `PRECISAO_GEOHASH_CONSULTA`): se um lado mudar sozinho, o indice gravado
+/// deixa de casar com a consulta do app.
+const int precisaoGeohashConsulta = 6;
+
 /// Direcoes usadas ao caminhar entre celulas vizinhas.
 enum DirecaoVizinho { norte, sul, leste, oeste }
 
@@ -214,14 +222,14 @@ class GeoHashVizinhanca {
   /// Todas as celulas existentes, sem repeticao e em ordem estavel.
   List<String> get todas => <String>{
         centro,
-        if (norte != null) norte!,
-        if (sul != null) sul!,
-        if (leste != null) leste!,
-        if (oeste != null) oeste!,
-        if (nordeste != null) nordeste!,
-        if (noroeste != null) noroeste!,
-        if (sudeste != null) sudeste!,
-        if (sudoeste != null) sudoeste!,
+        ?norte,
+        ?sul,
+        ?leste,
+        ?oeste,
+        ?nordeste,
+        ?noroeste,
+        ?sudeste,
+        ?sudoeste,
       }.toList()
         ..sort();
 }
