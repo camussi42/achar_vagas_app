@@ -23,6 +23,7 @@ from pathlib import Path
 
 import export_trechos
 import geohash
+import semear_firestore
 import trechos
 
 #: Raiz do repositorio (test_pipeline.py -> tools/pipeline -> tools -> repo).
@@ -412,5 +413,202 @@ class ExportTrechosCliTest(unittest.TestCase):
         self.assertNotEqual(linhas[0]["centroide"], linhas[1]["centroide"])
         for linha in linhas:
             self.assertTrue(PADRAO_TRECHO_ID.match(linha["id"]), linha["id"])
+
+
+class _DocumentoFalso:
+    """Documento do Admin SDK reduzido a sua referencia."""
+
+    def __init__(self, identificador: str) -> None:
+        self.reference = identificador
+
+
+class _ColecaoFalsa:
+    """Colecao minima do Admin SDK para testar o seeder sem rede."""
+
+    def __init__(self, cliente: "_ClienteFalso") -> None:
+        self._cliente = cliente
+
+    def document(self, identificador: str) -> str:
+        return identificador
+
+    def limit(self, quantidade: int) -> "_ColecaoFalsa":
+        self._cliente.limite = quantidade
+        return self
+
+    def stream(self) -> list:
+        pagina = self._cliente.existentes[: self._cliente.limite]
+        self._cliente.existentes = self._cliente.existentes[self._cliente.limite :]
+        return [_DocumentoFalso(identificador) for identificador in pagina]
+
+
+class _LoteFalso:
+    def __init__(self, cliente: "_ClienteFalso") -> None:
+        self._cliente = cliente
+        self._ids: list[str] = []
+        self._apagar: list[str] = []
+
+    def set(self, referencia: str, corpo: dict) -> None:
+        self._ids.append(referencia)
+        self._cliente.corpos[referencia] = corpo
+
+    def delete(self, referencia: str) -> None:
+        self._apagar.append(referencia)
+
+    def commit(self) -> None:
+        self._cliente.commits += 1
+        self._cliente.gravados.extend(self._ids)
+        self._cliente.apagados.extend(self._apagar)
+
+
+class _ClienteFalso:
+    """Cliente do Admin SDK de mentira: so guarda o que foi gravado."""
+
+    def __init__(self, existentes: list | None = None) -> None:
+        self.gravados: list[str] = []
+        self.apagados: list[str] = []
+        self.corpos: dict[str, dict] = {}
+        self.existentes = list(existentes or [])
+        self.limite = 0
+        self.commits = 0
+
+    def collection(self, _nome: str) -> _ColecaoFalsa:
+        return _ColecaoFalsa(self)
+
+    def batch(self) -> _LoteFalso:
+        return _LoteFalso(self)
+
+
+class SemeadorTest(unittest.TestCase):
+    """O seeder le o NDJSON do export e grava na forma que o app espera."""
+
+    @staticmethod
+    def ponto(lat: float, lng: float) -> dict:
+        """Faz as vezes de `GeoPoint` do Admin SDK (que nao esta instalado aqui)."""
+        return {"latitude": lat, "longitude": lng}
+
+    def test_converte_geometria_e_centroide_em_geopoint(self):
+        documento = trechos.montar_trechos(feature(), release="2026-08-19.0")[
+            0
+        ].para_documento()
+        identificador, corpo = semear_firestore.para_firestore(documento, self.ponto)
+
+        self.assertEqual(identificador, documento["id"])
+        self.assertEqual(corpo["id"], documento["id"])
+        self.assertEqual(set(corpo["centroide"]), {"latitude", "longitude"})
+        self.assertEqual(len(corpo["geometria"]), len(documento["geometria"]))
+        for vertice in corpo["geometria"]:
+            self.assertEqual(set(vertice), {"latitude", "longitude"})
+        self.assertEqual(corpo["geohashConsulta"], documento["geohashConsulta"])
+        self.assertEqual(corpo["via"], "Rua Teste")
+        self.assertEqual(corpo["release"], "2026-08-19.0")
+
+    def test_le_o_ndjson_do_export(self):
+        trecho = trechos.montar_trechos(feature())[0]
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "trechos.ndjson"
+            export_trechos.gerar_ndjson([trecho], caminho)
+            lidos = list(semear_firestore.ler_documentos(caminho, self.ponto))
+
+        self.assertEqual(len(lidos), 1)
+        self.assertEqual(lidos[0][0], trecho.id)
+
+    def test_ignora_linhas_vazias(self):
+        documento = json.dumps(trechos.montar_trechos(feature())[0].para_documento())
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "trechos.ndjson"
+            caminho.write_text(f"\n{documento}\n\n", encoding="utf-8")
+            lidos = list(semear_firestore.ler_documentos(caminho, self.ponto))
+
+        self.assertEqual(len(lidos), 1)
+
+    def test_rejeita_linha_quebrada(self):
+        for conteudo in ('{"id": "gers:x"}\n', "nao e json\n", "[1, 2]\n"):
+            with tempfile.TemporaryDirectory() as pasta:
+                caminho = Path(pasta) / "trechos.ndjson"
+                caminho.write_text(conteudo, encoding="utf-8")
+                with self.assertRaises(ValueError, msg=conteudo):
+                    list(semear_firestore.ler_documentos(caminho, self.ponto))
+
+    def test_ida_e_volta_do_export_para_o_seeder(self):
+        """GeoJSON -> NDJSON (pipeline) -> documento do Firestore (seeder)."""
+        conectores = [
+            {"connector_id": "a", "at": 0.0},
+            {"connector_id": "esquina", "at": 0.5},
+            {"connector_id": "c", "at": 1.0},
+        ]
+        documento = {
+            "type": "FeatureCollection",
+            "features": [feature(conectores=conectores)],
+        }
+        gerados = trechos.trechos_de_geojson(documento, dividir_nos_conectores=True)
+
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "trechos.ndjson"
+            export_trechos.gerar_ndjson(gerados, caminho)
+            lidos = dict(semear_firestore.ler_documentos(caminho, self.ponto))
+
+        self.assertEqual(len(lidos), 2)
+        for identificador, corpo in lidos.items():
+            self.assertTrue(PADRAO_TRECHO_ID.match(identificador), identificador)
+            self.assertEqual(corpo["id"], identificador)
+            self.assertEqual(set(corpo["centroide"]), {"latitude", "longitude"})
+            self.assertEqual(len(corpo["geometria"]), 2)
+
+
+    def test_escreve_em_lotes(self):
+        cliente = _ClienteFalso()
+        documentos = iter([(f"gers:{i}", {}) for i in range(4)])
+        gravados = semear_firestore.escrever(cliente, documentos, tamanho_lote=2)
+
+        self.assertEqual(gravados, 4)
+        self.assertEqual(cliente.commits, 2)
+        self.assertEqual(cliente.gravados, [f"gers:{i}" for i in range(4)])
+
+    def test_numero_redondo_nao_commita_lote_vazio(self):
+        cliente = _ClienteFalso()
+        documentos = iter([(f"gers:{i}", {}) for i in range(2)])
+        semear_firestore.escrever(cliente, documentos, tamanho_lote=2)
+
+        self.assertEqual(cliente.commits, 1)
+
+    def test_limpa_em_paginas(self):
+        cliente = _ClienteFalso(existentes=["gers:a", "gers:b", "gers:c"])
+        apagados = semear_firestore.limpar(cliente, tamanho_lote=2)
+
+        self.assertEqual(apagados, 3)
+        self.assertEqual(cliente.apagados, ["gers:a", "gers:b", "gers:c"])
+
+    def test_valida_o_host_do_emulador(self):
+        self.assertEqual(
+            semear_firestore.validar_emulador(" localhost:8080 "), "localhost:8080"
+        )
+        self.assertEqual(
+            semear_firestore.validar_emulador("firebase:8080"), "firebase:8080"
+        )
+        self.assertEqual(semear_firestore.EMULADOR_PADRAO, "localhost:8080")
+
+        for ruim in ("", "localhost", "http://localhost:8080", "a:8080; rm -rf /"):
+            with self.assertRaises(ValueError, msg=ruim):
+                semear_firestore.validar_emulador(ruim)
+
+    def test_cli_usa_os_padroes_do_repositorio(self):
+        argumentos = semear_firestore.criar_parser().parse_args([])
+
+        self.assertEqual(argumentos.arquivo, Path("trechos.ndjson"))
+        self.assertEqual(argumentos.projeto, "demo-achar-vagas")
+        self.assertFalse(argumentos.limpar)
+        self.assertEqual(
+            semear_firestore.validar_emulador(argumentos.emulador),
+            argumentos.emulador,
+        )
+
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     unittest.main()
