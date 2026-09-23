@@ -29,22 +29,29 @@ String idadeLegivel(DateTime? criadoEm, {required DateTime agora}) {
 String _contagem(int total) =>
     total == 1 ? '1 relato válido' : '$total relatos válidos';
 
-/// abre o detalhe de [camada] em uma folha inferior.
+/// abre o detalhe de [camada]; com rota, pedir a rota fecha a folha antes.
 Future<void> mostrarDetalheTrecho(
   BuildContext context, {
   required TrechoEstado camada,
   required DateTime agora,
   VoidCallback? onIrAteAqui,
-}) =>
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (BuildContext context) => DetalheTrecho(
-        camada: camada,
-        agora: agora,
-        onIrAteAqui: onIrAteAqui,
-      ),
-    );
+}) {
+  final irAteAqui = onIrAteAqui;
+  return showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (BuildContext context) => DetalheTrecho(
+      camada: camada,
+      agora: agora,
+      onIrAteAqui: irAteAqui == null
+          ? null
+          : () {
+              Navigator.of(context).pop();
+              irAteAqui();
+            },
+    ),
+  );
+}
 
 class DetalheTrecho extends StatelessWidget {
   const DetalheTrecho({
