@@ -2,6 +2,7 @@
 library;
 
 import 'package:achar_vagas_app/models/estado_trecho.dart';
+import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/ui/camadas_mapa.dart';
 import 'package:achar_vagas_app/ui/paleta_estado.dart';
 import 'package:flutter/material.dart';
