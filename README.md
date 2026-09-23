@@ -36,10 +36,38 @@ docker-compose up --build
 
 - notas úteis:
 	- os arquivos docker estão em docker/ e o compose na raiz (docker-compose.yml)
-	- dados do emulador são gravados em emulator-data/ para persistência entre execuções
+	- **o app do container já sobe apontado para os emuladores** (`--dart-define=USAR_EMULADOR=true`, veja a seção "app apontado para os emuladores")
+	- o que persiste: `emulator-data/` guarda `trechos` e `relatos` entre execuções (`--import=./emulator-data` e `--export-on-exit=./emulator-data` no container do firebase)
+		- o export acontece na saída limpa do emulador: o `docker-compose down` manda SIGINT (veja o `STOPSIGNAL` do `docker/firebase/Dockerfile`) e o compose espera até 30s (`stop_grace_period`)
+		- a pasta é ignorada pelo git (só `emulator-data/.gitkeep` é versionado)
+		- para limpar de verdade, apague `emulator-data/` menos o `.gitkeep`: o compose usa bind mount, então nem `docker-compose down -v` remove a pasta
 	- parar: ctrl+c no terminal ou `docker-compose down`
 	- se mudar dependências e quiser forçar rebuild: `docker-compose up --build --force-recreate`
 	- caso o container flutter abra problemas, rode `flutter pub get` localmente ou inspecione os logs do container
+
+## app apontado para os emuladores (issue #24)
+
+por padrão o app fala com o firebase de verdade (com `firebase_options` preenchido) ou sobe em modo demonstração (sem ele). com a flag do build ligada ele passa a escrever/ler nos emuladores do docker-compose:
+
+```bash
+# flutter web do docker-compose: a flag já vem no docker/flutter/Dockerfile
+docker-compose up --build
+
+# rodando o app na sua máquina
+flutter run -d chrome --dart-define=USAR_EMULADOR=true
+```
+
+- `USAR_EMULADOR=true` chama `FirebaseAuth.instance.useAuthEmulator` (9099) e `FirebaseFirestore.instance.useFirestoreEmulator` (8080) antes do login anônimo
+- `HOST_EMULADOR` (padrão `localhost`) troca o host: de dentro do navegador é `localhost` e **não** `firebase`, que é o nome do serviço visto de dentro do outro container
+	- no emulador do android o `localhost` vira `10.0.2.2` sozinho, pelo host mapping do próprio SDK
+- com a flag ligada o `firebase_options.dart` é ignorado: o app usa o projeto local `demo-achar-vagas` (o mesmo do `.firebaserc` e do `semear_firestore.py`), porque é lá que a semente de `trechos` fica — `--dart-define=PROJETO_EMULADOR=outro` troca o projeto
+- sem a flag nada muda: release e modo demonstração continuam iguais, e as portas/projeto são os mesmos do `firebase.json`/`docker-compose.yml` (contrato coberto por `test/emulador_test.dart`)
+
+### como testar (issue #24)
+
+1. `flutter test test/emulador_test.dart`
+2. `docker-compose up --build` e abrir http://localhost:5000
+3. relatar "tem vaga": o documento aparece em `relatos` na UI do emulador (http://localhost:4000) com `criadoEm` gravado pelo servidor — e não no firebase real
 
 ## mapa, gps e relatos (issues #3, #12 e #13)
 
