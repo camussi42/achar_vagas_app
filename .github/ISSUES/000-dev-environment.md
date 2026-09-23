@@ -24,6 +24,7 @@ notas:
 
 - sem `firebase_options.dart` preenchido o app sobe em **modo demonstração** (trechos
 	reais do centro de Campo Mourão + relatos em memória), que não precisa de emulador
-- pendências conhecidas do fluxo: o container do emulador ainda não usa
-	`--import`/`--export-on-exit` (o `emulator-data/` não é aproveitado) e o app não é
-	apontado para os emuladores (`useFirestoreEmulator`/`useAuthEmulator`)
+- pendências do fluxo (resolvidas depois, nas issues #24 e #25): o container do
+	emulador não usava `--import`/`--export-on-exit` (o `emulator-data/` não era
+	aproveitado) e o app não era apontado para os emuladores
+	(`useFirestoreEmulator`/`useAuthEmulator`)

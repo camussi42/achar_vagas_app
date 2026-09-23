@@ -11,6 +11,8 @@ services:
       - "8080:8080"
       - "9099:9099"
       - "4000:4000"
+    # espaco para o firebase exportar emulator-data/ na saida (o padrao sao 10s)
+    stop_grace_period: 30s
   flutter:
     build:
       context: .
