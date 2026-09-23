@@ -46,3 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Dados do emulador do firebase: persistem entre execucoes (emulator-data/), mas
+# nao entram no git. O .gitkeep e versionado so para a pasta existir no start.
+/emulator-data/*
+!/emulator-data/.gitkeep
