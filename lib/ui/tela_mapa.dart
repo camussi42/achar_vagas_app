@@ -23,6 +23,7 @@ import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/ui/botoes_relato.dart';
 import 'package:achar_vagas_app/ui/camadas_mapa.dart';
+import 'package:achar_vagas_app/ui/detalhe_trecho.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
 import 'package:achar_vagas_app/ui/paleta_estado.dart';
 import 'package:flutter/material.dart';
@@ -50,6 +51,12 @@ class TelaMapa extends StatefulWidget {
 
 class _TelaMapaState extends State<TelaMapa> {
   final MapController _controlador = MapController();
+
+  /// hit test separado por camada: cada uma sobrescreve o proprio valor.
+  final LayerHitNotifier<String> _hitLinhas =
+      ValueNotifier<LayerHitResult<String>?>(null);
+  final LayerHitNotifier<String> _hitCirculos =
+      ValueNotifier<LayerHitResult<String>?>(null);
 
   StreamSubscription<List<Relato>>? _inscricaoRelatos;
   StreamSubscription<LatLng>? _inscricaoPosicao;
@@ -89,6 +96,8 @@ class _TelaMapaState extends State<TelaMapa> {
     _relogio?.cancel();
     _inscricaoRelatos?.cancel();
     _inscricaoPosicao?.cancel();
+    _hitLinhas.dispose();
+    _hitCirculos.dispose();
     _controlador.dispose();
     super.dispose();
   }
@@ -241,32 +250,48 @@ class _TelaMapaState extends State<TelaMapa> {
       ..showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
-  /// Trechos canonicos com relato viram linha (regra 1 da #13).
-  List<Polyline<Object>> _polylines() => <Polyline<Object>>[
+  /// trechos canonicos com relato viram linha; hitValue e o id do trecho.
+  List<Polyline<String>> _polylines() => <Polyline<String>>[
         for (final camada in _camadas)
           if (camada.temLinha)
-            Polyline<Object>(
+            Polyline<String>(
               points: camada.linha,
               color: corDeEstado(camada.estado),
               strokeWidth: 6,
               borderColor: Colors.black.withValues(alpha: 0.35),
               borderStrokeWidth: 1,
+              hitValue: camada.id.valor,
             ),
       ];
 
   /// Fallback geohash (e trecho sem geometria) viram circulo (regras 2 e 3).
-  List<CircleMarker<Object>> _circles() => <CircleMarker<Object>>[
+  List<CircleMarker<String>> _circles() => <CircleMarker<String>>[
         for (final camada in _camadas)
           if (!camada.temLinha)
-            CircleMarker<Object>(
+            CircleMarker<String>(
               point: camada.centro,
               radius: camada.raioM,
               useRadiusInMeter: true,
               color: corDeEstado(camada.estado).withValues(alpha: 0.45),
               borderColor: corDeEstado(camada.estado),
               borderStrokeWidth: 2,
+              hitValue: camada.id.valor,
             ),
       ];
+
+  /// abre o detalhe do trecho tocado, a partir do hit test da camada.
+  void _abrirDetalheDe(LayerHitNotifier<String> hit) {
+    final camada =
+        trechoTocado(_camadas, hit.value?.hitValues ?? const <String>[]);
+    if (camada == null) return;
+    unawaited(
+      mostrarDetalheTrecho(
+        context,
+        camada: camada,
+        agora: DateTime.now().toUtc(),
+      ),
+    );
+  }
 
   Marker _marcadorUsuario(LatLng ponto) => Marker(
         point: ponto,
@@ -333,10 +358,21 @@ class _TelaMapaState extends State<TelaMapa> {
                       // que carregou (o modo demonstracao roda muito sem rede).
                       errorTileCallback: (tile, erro, pilha) {},
                     ),
-                    PolylineLayer(polylines: _polylines()),
-                    CircleLayer(
-                      circles: _circles(),
-                      optimizeRadiusInMeters: true,
+                    // hitNotifier so acerta trecho tocado: toque vazio nao abre.
+                    GestureDetector(
+                      onTap: () => _abrirDetalheDe(_hitLinhas),
+                      child: PolylineLayer<String>(
+                        polylines: _polylines(),
+                        hitNotifier: _hitLinhas,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _abrirDetalheDe(_hitCirculos),
+                      child: CircleLayer<String>(
+                        circles: _circles(),
+                        hitNotifier: _hitCirculos,
+                        optimizeRadiusInMeters: true,
+                      ),
                     ),
                     if (_posicaoUsuario != null)
                       MarkerLayer(

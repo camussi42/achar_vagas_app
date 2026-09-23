@@ -54,6 +54,16 @@ a tela inicial e o mapa (OpenStreetMap via `flutter_map`), centralizado no centr
 	- trecho sem relato recente **nao** e pintado (a legenda na tela mostra a cor neutra)
 - a permissao de localizacao e pedida ja na abertura; sem permissao o mapa continua em Campo Mourao e so o botao de localizacao avisa
 
+## detalhe do trecho ao tocar no mapa (issue #26)
+
+tocar num trecho pintado (linha verde/vermelha ou circulo da area aproximada) abre uma folha com o que o mapa ja calculou:
+
+- nome da via (ou `area aproximada (~N m)` no fallback geohash) e o estado atual com a cor correspondente
+- quantos relatos validos o trecho tem (com a quebra vaga / lotado / liberando) e ha quanto tempo foi o relato mais recente
+- o toque usa o hit test das camadas do `flutter_map` (`hitValue`/`hitNotifier` com o id do trecho): tocar no mapa vazio nao abre nada
+- nenhuma consulta nova ao firestore: os dados saem de `combinar` (`lib/ui/camadas_mapa.dart`), o mesmo calculo que pinta o mapa
+- o botao de rota da folha so aparece quando a tela informa o callback (ponto de extensao da issue "abrir rota ate o trecho")
+
 ## modo demonstracao (sem firebase)
 
 sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com os **40 trechos reais** do centro de Campo Mourao (`lib/data/trechos_demo_gerado.dart`) e relatos em memoria: da para navegar e ver as cores funcionando sem nenhum servico externo.
@@ -64,7 +74,7 @@ sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com o
 ## como testar o mapa
 
 ```bash
-flutter test          # geohash, trechoId, estado por trecho, camadas e tela do mapa
+flutter test          # geohash, trechoId, estado por trecho, camadas, detalhe e tela do mapa
 flutter analyze
 ```
 
