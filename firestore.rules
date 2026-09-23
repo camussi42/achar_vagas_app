@@ -38,7 +38,12 @@ service cloud.firestore {
         && request.resource.data.geo.geohash is string
         && request.resource.data.geo.geohashConsulta is string
         // FieldValue.serverTimestamp(): o horario e sempre do servidor.
-        && request.resource.data.criadoEm == request.time;
+        && request.resource.data.criadoEm == request.time
+        // alvo da politica de TTL; +/- 1 min cobre o relogio do aparelho
+        // (o SDK nao le request.time nem soma duracao a serverTimestamp).
+        && request.resource.data.expiraEm is timestamp
+        && request.resource.data.expiraEm >= request.time + duration.value(19, 'm')
+        && request.resource.data.expiraEm <= request.time + duration.value(21, 'm');
 
       allow update, delete: if false;
     }

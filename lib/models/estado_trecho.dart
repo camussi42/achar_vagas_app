@@ -13,11 +13,7 @@ library;
 
 import 'package:achar_vagas_app/models/relato.dart';
 
-/// Quanto tempo um relato continua valendo para pintar o mapa (issue #13).
-///
-/// Passado esse prazo o trecho volta ao estado neutro, mesmo sem nenhum relato
-/// novo: o calculo e sempre refeito no cliente a partir do relogio atual.
-const Duration validadeRelatoPadrao = Duration(minutes: 20);
+// validadeRelatoPadrao mora em models/relato.dart; aqui o prazo chega por parametro.
 
 enum EstadoTrecho { vaga, lotado, saindo, desconhecido }
 
