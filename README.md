@@ -64,6 +64,15 @@ tocar num trecho pintado (linha verde/vermelha ou circulo da area aproximada) ab
 - nenhuma consulta nova ao firestore: os dados saem de `combinar` (`lib/ui/camadas_mapa.dart`), o mesmo calculo que pinta o mapa
 - o botao de rota da folha so aparece quando a tela informa o callback (ponto de extensao da issue "abrir rota ate o trecho")
 
+## rota ate o trecho (issue #27)
+
+no detalhe de um trecho, **ir até aqui** abre a rota ate ele (o destino e o centroide da linha ou o centro do circulo do fallback):
+
+- **android**: esquema `geo:lat,lng?q=lat,lng(rotulo)` — quem atende e o app de mapas instalado (waze, google maps); o `<queries>` do manifesto e o que permite consultar esse esquema no android 11+
+- **web/desktop**: URL universal `https://www.google.com/maps/dir/?api=1&destination=lat,lng` (o esquema `geo:` nao existe fora do android)
+- sem app de mapas disponivel (ou com a rota recusada) a tela avisa e nada quebra: nenhuma falha do `url_launcher` vira excecao
+- `lib/services/rota.dart` isola o encaminhamento: `uriRota` e pura (da para testar a URL de um ponto conhecido sem abrir nada) e a tela conversa com a interface `RotaService`, o que permite um duble nos testes
+
 ## modo demonstracao (sem firebase)
 
 sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com os **40 trechos reais** do centro de Campo Mourao (`lib/data/trechos_demo_gerado.dart`) e relatos em memoria: da para navegar e ver as cores funcionando sem nenhum servico externo.
@@ -74,7 +83,7 @@ sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com o
 ## como testar o mapa
 
 ```bash
-flutter test          # geohash, trechoId, estado por trecho, camadas, detalhe e tela do mapa
+flutter test          # geohash, trechoId, estado por trecho, camadas, detalhe, rota e tela do mapa
 flutter analyze
 ```
 

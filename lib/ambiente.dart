@@ -1,8 +1,5 @@
-/// Grafo de dependencias do app, montado uma unica vez no `main`.
-///
-/// A tela recebe tudo pronto (localizacao, repositorios e o resolvedor de
-/// trecho). Isso permite trocar Firestore por memoria (modo demonstracao, sem
-/// `firebase_options`) e GPS por posicao fixa (testes) sem tocar na UI.
+/// grafo de dependencias do app, montado uma unica vez no `main`;
+/// a tela recebe tudo pronto, o que permite trocar por memoria e dubles.
 library;
 
 import 'package:achar_vagas_app/data/trechos_demo_gerado.dart';
@@ -12,6 +9,7 @@ import 'package:achar_vagas_app/geo/trecho_resolver.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
+import 'package:achar_vagas_app/services/rota.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
 
 /// Uid usado no modo demonstracao (sem Auth anonimo).
@@ -24,6 +22,7 @@ class AmbienteApp {
     required this.localizacao,
     required this.relatos,
     required this.trechos,
+    this.rota = const RotaUrlLauncher(),
   });
 
   /// `false` quando o Firebase nao esta configurado (modo demonstracao).
@@ -35,6 +34,9 @@ class AmbienteApp {
   final LocalizacaoService localizacao;
   final RelatosRepository relatos;
   final TrechosRepository trechos;
+
+  /// servico de rota ate o trecho.
+  final RotaService rota;
 
   /// Cascata da issue #12: trecho canonico (Overture/GERS) e, quando nao ha
   /// malha importada para o ponto, a area aproximada por geohash.
