@@ -5,13 +5,18 @@ Exemplos:
     # baixa o bbox do centro de Campo Mourao e gera o NDJSON para o Firestore
     python tools/pipeline/export_trechos.py --out trechos.ndjson
 
-    # reaproveita um export ja baixado, dividindo por esquina
+    # por padrao cada segmento e cortado nos conectores, virando um lado de
+    # quadra (chave `gers:<id>@<start_lr>:<end_lr>`); para manter a rua inteira:
     python tools/pipeline/export_trechos.py --geojson cm.geojson \
-        --dividir-nos-conectores --out trechos.ndjson
+        --nao-dividir-nos-conectores --out trechos.ndjson
 
     # gera a semente de demonstracao (usada quando nao ha Firebase)
     python tools/pipeline/export_trechos.py --geojson cm.geojson \
         --seed-dart lib/data/trechos_demo_gerado.dart
+
+Depois de gerar o NDJSON, semear o emulador:
+
+    python tools/pipeline/semear_firestore.py --arquivo trechos.ndjson
 
 A release nunca fica fixa no codigo: e lida do catalogo STAC da Overture.
 """
@@ -177,7 +182,8 @@ def gerar_semente_dart(
     print(f"semente Dart: {destino} ({len(ordenados)} trechos)")
 
 
-def main() -> int:
+def criar_parser() -> argparse.ArgumentParser:
+    """Argumentos da CLI (separado de `main` para os testes lerem os padroes)."""
     parser = argparse.ArgumentParser(description="Overture -> trechos")
     parser.add_argument("--geojson", type=Path, help="GeoJSON ja baixado (pula o download)")
     parser.add_argument("--bbox", default=BBOX_PADRAO, help="bbox O/S/L/N")
@@ -187,10 +193,31 @@ def main() -> int:
     parser.add_argument("--seed-limite", type=int, default=40)
     parser.add_argument("--somente-com-nome", action="store_true")
     parser.add_argument("--sem-filtro-de-classe", action="store_true")
-    parser.add_argument("--dividir-nos-conectores", action="store_true")
+    # O padrao e dividir: o relato vale para um lado de quadra, nao para a rua
+    # inteira (assim um relato antes da esquina nao pinta a quadra seguinte).
+    parser.add_argument(
+        "--nao-dividir-nos-conectores",
+        dest="dividir_nos_conectores",
+        action="store_false",
+        help=(
+            "mantem o segmento inteiro (padrao: divide nos conectores; trecho "
+            "sem esquina no meio fica com a chave simples gers:<id>)"
+        ),
+    )
+    parser.add_argument(
+        "--dividir-nos-conectores",
+        dest="dividir_nos_conectores",
+        action="store_true",
+        help=argparse.SUPPRESS,  # aceito por compatibilidade: ja e o padrao
+    )
+    parser.set_defaults(dividir_nos_conectores=True)
     parser.add_argument("--min-metros-trecho", type=float, default=40.0)
     parser.add_argument("--tolerancia-graus", type=float, default=0.00005)
-    argumentos = parser.parse_args()
+    return parser
+
+
+def main() -> int:
+    argumentos = criar_parser().parse_args()
 
     bbox = validar_bbox(argumentos.bbox)
     release = argumentos.release or release_atual()

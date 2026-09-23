@@ -231,9 +231,16 @@ def montar_trechos(
 ) -> list[Trecho]:
     """Converte **uma** feature de segmento em zero ou mais trechos.
 
-    `dividers_nos_conectores=False` (padrao) mantem o segmento inteiro, que e o
-    suficiente para o mapa por cor. Ligando a divisao, cada trecho passa a ser um
-    lado de quadra entre conectores (`gers:<id>@<start>:<end>`).
+    `dividir_nos_conectores=False` (padrao do modulo) mantem o segmento inteiro,
+    que e o suficiente para o mapa por cor. Com a divisao ligada (padrao da CLI,
+    `--nao-dividir-nos-conectores` desliga), cada trecho passa a ser **um lado de
+    quadra** entre conectores: a chave ganha a faixa linear do segmento original
+    (`gers:<id>@<start_lr>:<end_lr>`, 4 casas). Assim o relato feito antes da
+    esquina nao pinta a quadra do outro lado.
+
+    Pedaco que cobre o segmento inteiro (nenhum conector no meio) continua com a
+    chave simples `gers:<id>`: a identidade do trecho nao muda por causa da
+    divisao.
     """
     propriedades = feature.get("properties") or {}
     if (propriedades.get("subtype") or "road") != "road":
@@ -281,7 +288,11 @@ def montar_trechos(
 
         lat_lng = _para_lat_lng(simplificado)
         centroide = _centroide(lat_lng)
-        sufixo = f"@{inicio:.4f}:{fim:.4f}" if dividir_nos_conectores else ""
+        # A faixa linear so entra na chave quando o segmento realmente foi
+        # cortado: um pedaco que cobre o segmento inteiro (sem conector no meio)
+        # continua com a chave simples `gers:<id>`, igual ao que o app espera.
+        cortado = dividir_nos_conectores and (inicio > 0.0 or fim < 1.0)
+        sufixo = f"@{inicio:.4f}:{fim:.4f}" if cortado else ""
         trechos.append(
             Trecho(
                 id=f"gers:{identificador}{sufixo}",
