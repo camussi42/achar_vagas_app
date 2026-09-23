@@ -6,7 +6,9 @@
 /// - #12 botao de localizacao e botoes de relato, resolvendo o trecho pela
 ///       cascata Overture (GERS) -> geohash;
 /// - #13 trechos pintados pelo relato mais recente (validade de 20 min), com
-///       linha para trecho canonico e circulo para o fallback geohash.
+///       linha para trecho canonico e circulo para o fallback geohash;
+/// - #30 localizacao indisponivel explicada por caso, com atalho para as
+///       configuracoes do app (permissao negada) ou do sistema (GPS desligado).
 ///
 /// A tela nao fala com Firebase nem com `geolocator` diretamente: recebe um
 /// [AmbienteApp], o que permite rodar em modo demonstracao e testar com
@@ -21,6 +23,7 @@ import 'package:achar_vagas_app/geo/geo_utils.dart';
 import 'package:achar_vagas_app/models/estado_trecho.dart';
 import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
+import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/ui/botoes_relato.dart';
 import 'package:achar_vagas_app/ui/camadas_mapa.dart';
 import 'package:achar_vagas_app/ui/detalhe_trecho.dart';
@@ -35,6 +38,9 @@ const Key chaveMarcadorUsuario = Key('marcador-usuario');
 
 /// Chave do botao que pede a permissao e centraliza no usuario.
 const Key chaveBotaoLocalizacao = Key('botao-localizacao');
+
+/// chave da acao que abre as configuracoes no aviso de localizacao.
+const Key chaveAbrirConfiguracoes = Key('abrir-configuracoes');
 
 class TelaMapa extends StatefulWidget {
   const TelaMapa({super.key, required this.ambiente, this.tileProvider});
@@ -78,9 +84,8 @@ class _TelaMapaState extends State<TelaMapa> {
     super.initState();
     _observarRelatos(_centroConsulta);
     unawaited(_carregarTrechos(_centroConsulta));
-    // #3: a permissao de localizacao e pedida ja na abertura (a implementacao
-    // nunca lanca: sem permissao/servico a resposta e `null` e o mapa fica no
-    // centro de Campo Mourao).
+    // #3: na abertura a falha e silenciosa (mapa ja abre em campo mourao) e o
+    // aviso com correcao fica so para o botao de localizacao.
     unawaited(_irParaUsuario(inicial: true));
     _inscricaoPosicao = widget.ambiente.localizacao.acompanhar().listen((ponto) {
       if (!mounted) return;
@@ -164,20 +169,58 @@ class _TelaMapaState extends State<TelaMapa> {
     setState(() => _camadas = camadas);
   }
 
-  /// Pede a localizacao (e a permissao) e centraliza o mapa no usuario.
+  /// pede a localizacao e centraliza; na abertura a falha e silenciosa.
   Future<void> _irParaUsuario({bool inicial = false}) async {
-    final posicao = await widget.ambiente.localizacao.posicaoAtual();
+    final resultado = await widget.ambiente.localizacao.posicaoAtual();
     if (!mounted) return;
-    if (posicao == null) {
-      // Na abertura a falha e silenciosa: o mapa ja esta em Campo Mourao.
-      if (!inicial) {
-        _avisar('Não foi possível obter sua localização. Confira a permissão.');
-      }
-      return;
+    switch (resultado) {
+      case LocalizacaoOk(:final ponto):
+        setState(() => _posicaoUsuario = ponto);
+        _mover(ponto, zoomUsuarioMapa);
+        _recentralizar(ponto);
+      case LocalizacaoIndisponivel(:final motivo):
+        if (!inicial) _avisarSemLocalizacao(motivo);
     }
-    setState(() => _posicaoUsuario = posicao);
-    _mover(posicao, zoomUsuarioMapa);
-    _recentralizar(posicao);
+  }
+
+  /// aviso do motivo, com botao de correcao quando houver.
+  void _avisarSemLocalizacao(MotivoLocalizacao motivo) {
+    final aviso = switch (motivo) {
+      MotivoLocalizacao.permissaoNegada => _AvisoLocalizacao(
+          texto: 'A permissão de localização está bloqueada. Autorize o '
+              'acesso nas configurações do app.',
+          rotuloAcao: 'Abrir configurações',
+          abrirConfiguracoes: widget.ambiente.localizacao.abrirConfiguracoes,
+        ),
+      MotivoLocalizacao.permissaoNegadaParaSempre => _AvisoLocalizacao(
+          texto: 'A permissão de localização está negada em definitivo. Abra '
+              'as configurações do app e permita o acesso.',
+          rotuloAcao: 'Abrir configurações',
+          abrirConfiguracoes: widget.ambiente.localizacao.abrirConfiguracoes,
+        ),
+      MotivoLocalizacao.servicoDesligado => _AvisoLocalizacao(
+          texto: 'O GPS do aparelho está desligado. Ative a localização do '
+              'sistema para o app saber onde você está.',
+          rotuloAcao: 'Ativar localização',
+          abrirConfiguracoes:
+              widget.ambiente.localizacao.abrirConfiguracoesDeLocalizacao,
+        ),
+      MotivoLocalizacao.falha => const _AvisoLocalizacao(
+          texto: 'Não foi possível obter sua localização agora. '
+              'Tente de novo em instantes.',
+        ),
+    };
+    final abrirConfiguracoes = aviso.abrirConfiguracoes;
+    _avisar(
+      aviso.texto,
+      acao: abrirConfiguracoes == null
+          ? null
+          : SnackBarAction(
+              key: chaveAbrirConfiguracoes,
+              label: aviso.rotuloAcao!,
+              onPressed: () => unawaited(abrirConfiguracoes()),
+            ),
+    );
   }
 
   /// Move a camera; se o mapa ainda nao estiver pronto, guarda para depois.
@@ -207,11 +250,13 @@ class _TelaMapaState extends State<TelaMapa> {
     if (_gravando) return;
     setState(() => _gravando = true);
     try {
-      final posicao = await widget.ambiente.localizacao.posicaoAtual();
-      if (posicao == null) {
-        _avisar('Sem localização não dá para saber em que trecho você está.');
+      final resultado = await widget.ambiente.localizacao.posicaoAtual();
+      if (resultado case LocalizacaoIndisponivel(:final motivo)) {
+        // mesmo aviso do botao de localizacao.
+        _avisarSemLocalizacao(motivo);
         return;
       }
+      final posicao = (resultado as LocalizacaoOk).ponto;
 
       final trecho = await widget.ambiente.resolvedor.resolver(posicao);
       if (trecho == null) {
@@ -243,11 +288,12 @@ class _TelaMapaState extends State<TelaMapa> {
       ? trecho.rotulo
       : 'área aproximada (${trecho.id.chave}) — via ainda não mapeada';
 
-  void _avisar(String mensagem) {
+  /// mostra um aviso rapido; [acao] e o botao opcional.
+  void _avisar(String mensagem, {SnackBarAction? acao}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(mensagem)));
+      ..showSnackBar(SnackBar(content: Text(mensagem), action: acao));
   }
 
   /// trechos canonicos com relato viram linha; hitValue e o id do trecho.
@@ -409,4 +455,21 @@ class _TelaMapaState extends State<TelaMapa> {
       ),
     );
   }
+}
+
+/// aviso de localizacao indisponivel: texto e, quando houver, botao de ajuste.
+class _AvisoLocalizacao {
+  const _AvisoLocalizacao({
+    required this.texto,
+    this.rotuloAcao,
+    this.abrirConfiguracoes,
+  });
+
+  final String texto;
+
+  /// rotulo do botao; obrigatorio quando [abrirConfiguracoes] existe.
+  final String? rotuloAcao;
+
+  /// o que o botao faz: config do app ou do sistema.
+  final Future<void> Function()? abrirConfiguracoes;
 }
