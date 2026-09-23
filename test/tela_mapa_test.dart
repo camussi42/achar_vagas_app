@@ -16,8 +16,11 @@ import 'package:latlong2/latlong.dart';
 
 import 'apoio/tiles_falsos.dart';
 
-/// Tela do mapa (issues #3, #12 e #13) com repositorios em memoria, tiles
+/// tela do mapa (issues #3, #12, #13 e #30) com repositorios em memoria, tiles
 /// falsos e posicao controlada: nada de rede, GPS real ou Firebase.
+///
+/// os fakes registram as chamadas de `abrirConfiguracoes*` (aviso de
+/// localizacao indisponivel).
 void main() {
   const uuid = 'c1d70afe-a7de-4b73-a41c-e92526ab72f9';
   const pontoFixo = LatLng(-24.0455000, -52.3790000);
@@ -77,7 +80,12 @@ void main() {
   });
 
   testWidgets('abre centralizado em Campo Mourao', (tester) async {
-    await abrir(tester, ambienteCom(localizacao: const _LocalizacaoNula()));
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: _LocalizacaoSemAcesso(MotivoLocalizacao.servicoDesligado),
+      ),
+    );
 
     final camera = cameraDoMapa(tester);
     expect(camera.center.latitude, closeTo(centroCampoMourao.latitude, 1e-6));
@@ -96,12 +104,13 @@ void main() {
     expect(camera.zoom, zoomUsuarioMapa);
   });
 
-  testWidgets('sem permissao o botao de localizacao avisa e nada e gravado',
+  testWidgets('permissao negada explica o caso e abre as configuracoes do app',
       (tester) async {
+    final localizacao = _LocalizacaoSemAcesso(MotivoLocalizacao.permissaoNegada);
     final relatos = RelatosMemoria();
     await abrir(
       tester,
-      ambienteCom(localizacao: const _LocalizacaoNula(), relatos: relatos),
+      ambienteCom(localizacao: localizacao, relatos: relatos),
     );
 
     expect(find.byKey(chaveMarcadorUsuario), findsNothing);
@@ -110,10 +119,103 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 150));
 
-    expect(find.textContaining('permissão'), findsOneWidget);
+    // texto do motivo e caminho de correcao (a mensagem unica era da #3).
+    expect(find.textContaining('permissão de localização está bloqueada'),
+        findsOneWidget);
+    expect(find.text('Abrir configurações'), findsOneWidget);
     expect(relatos.todos, isEmpty);
     expect(cameraDoMapa(tester).center.latitude,
         closeTo(centroCampoMourao.latitude, 1e-6));
+
+    await tester.tap(find.byKey(chaveAbrirConfiguracoes));
+    await tester.pump();
+
+    expect(localizacao.configuracoesAppAbertas, 1);
+    expect(localizacao.configuracoesLocalizacaoAbertas, 0);
+  });
+
+  testWidgets('permissao negada para sempre tambem leva as configuracoes do app',
+      (tester) async {
+    final localizacao =
+        _LocalizacaoSemAcesso(MotivoLocalizacao.permissaoNegadaParaSempre);
+    await abrir(tester, ambienteCom(localizacao: localizacao));
+
+    await tester.tap(find.byKey(chaveBotaoLocalizacao));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    expect(find.textContaining('negada em definitivo'), findsOneWidget);
+
+    await tester.tap(find.byKey(chaveAbrirConfiguracoes));
+    await tester.pump();
+
+    expect(localizacao.configuracoesAppAbertas, 1);
+    expect(localizacao.configuracoesLocalizacaoAbertas, 0);
+  });
+
+  testWidgets('GPS desligado explica o caso e abre a localizacao do sistema',
+      (tester) async {
+    final localizacao = _LocalizacaoSemAcesso(MotivoLocalizacao.servicoDesligado);
+    await abrir(tester, ambienteCom(localizacao: localizacao));
+
+    await tester.tap(find.byKey(chaveBotaoLocalizacao));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    expect(find.textContaining('GPS do aparelho está desligado'), findsOneWidget);
+    expect(find.text('Ativar localização'), findsOneWidget);
+
+    await tester.tap(find.byKey(chaveAbrirConfiguracoes));
+    await tester.pump();
+
+    expect(localizacao.configuracoesLocalizacaoAbertas, 1);
+    expect(localizacao.configuracoesAppAbertas, 0);
+  });
+
+  testWidgets('falha ao obter a posicao avisa sem oferecer acao',
+      (tester) async {
+    final localizacao = _LocalizacaoSemAcesso(MotivoLocalizacao.falha);
+    await abrir(tester, ambienteCom(localizacao: localizacao));
+
+    await tester.tap(find.byKey(chaveBotaoLocalizacao));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    expect(find.textContaining('Tente de novo em instantes'), findsOneWidget);
+    expect(find.byKey(chaveAbrirConfiguracoes), findsNothing);
+    expect(localizacao.configuracoesAppAbertas, 0);
+    expect(localizacao.configuracoesLocalizacaoAbertas, 0);
+  });
+
+  testWidgets('na abertura o aviso de localizacao nao aparece', (tester) async {
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: _LocalizacaoSemAcesso(MotivoLocalizacao.permissaoNegada),
+      ),
+    );
+
+    // permissao negada na abertura: sem aviso, o caminho fica no botao.
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.textContaining('permissão'), findsNothing);
+  });
+
+  testWidgets('relatar sem localizacao avisa o motivo e nada e gravado',
+      (tester) async {
+    final localizacao = _LocalizacaoSemAcesso(MotivoLocalizacao.servicoDesligado);
+    final relatos = RelatosMemoria();
+    await abrir(
+      tester,
+      ambienteCom(localizacao: localizacao, relatos: relatos),
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Tem vaga'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 150));
+
+    expect(relatos.todos, isEmpty);
+    expect(find.textContaining('GPS do aparelho está desligado'), findsOneWidget);
+    expect(find.byKey(chaveAbrirConfiguracoes), findsOneWidget);
   });
 
   testWidgets('relatar resolve o trecho pela cascata e grava o relato',
@@ -189,15 +291,33 @@ void main() {
   });
 }
 
-/// Sem permissao/servico de GPS: nunca ha posicao.
-class _LocalizacaoNula implements LocalizacaoService {
-  const _LocalizacaoNula();
+/// localizacao sem acesso: devolve sempre o [motivo] e registra as configs.
+class _LocalizacaoSemAcesso implements LocalizacaoService {
+  _LocalizacaoSemAcesso(this.motivo);
+
+  final MotivoLocalizacao motivo;
+  int chamadas = 0;
+  int configuracoesAppAbertas = 0;
+  int configuracoesLocalizacaoAbertas = 0;
 
   @override
-  Future<LatLng?> posicaoAtual() async => null;
+  Future<ResultadoLocalizacao> posicaoAtual() async {
+    chamadas++;
+    return LocalizacaoIndisponivel(motivo);
+  }
 
   @override
   Stream<LatLng> acompanhar() => const Stream<LatLng>.empty();
+
+  @override
+  Future<void> abrirConfiguracoes() async {
+    configuracoesAppAbertas++;
+  }
+
+  @override
+  Future<void> abrirConfiguracoesDeLocalizacao() async {
+    configuracoesLocalizacaoAbertas++;
+  }
 }
 
 /// Nega a permissao na abertura e "autoriza" a partir da segunda chamada.
@@ -208,11 +328,19 @@ class _LocalizacaoContada implements LocalizacaoService {
   int chamadas = 0;
 
   @override
-  Future<LatLng?> posicaoAtual() async {
+  Future<ResultadoLocalizacao> posicaoAtual() async {
     chamadas++;
-    return chamadas == 1 ? null : ponto;
+    return chamadas == 1
+        ? const LocalizacaoIndisponivel(MotivoLocalizacao.permissaoNegada)
+        : LocalizacaoOk(ponto);
   }
 
   @override
   Stream<LatLng> acompanhar() => const Stream<LatLng>.empty();
+
+  @override
+  Future<void> abrirConfiguracoes() async {}
+
+  @override
+  Future<void> abrirConfiguracoesDeLocalizacao() async {}
 }
