@@ -77,8 +77,25 @@ flutter analyze
 
 - `firestore.rules`:
 	- `trechos`: leitura liberada para o cliente, escrita negada (quem grava é a pipeline, via Admin SDK)
-	- `relatos`: `uid` do próprio usuário, `tipo` conhecido, `geo.geopoint` como geopoint e `criadoEm == request.time` (servidor)
+	- `relatos`: `uid` do próprio usuário, `tipo` conhecido, `geo.geopoint` como geopoint, `criadoEm == request.time` (servidor) e `expiraEm` a menos de 1 min de `request.time + 20 min` (o campo do TTL, ver abaixo)
 	- o formato do `trechoId` é o **mesmo texto** no app (`lib/geo/trecho_id.dart`), nas regras (função `trechoIdValido`) e na pipeline (`tools/pipeline/trechos.py`); o teste de contrato falha se algum dos três mudar sozinho
+
+## relatos antigos: janela, indice e TTL (issue #28)
+
+- a consulta de relatos (`lib/services/relatos_repository.dart`) usa `whereIn` nas células de geohash **mais** uma janela de tempo (`criadoEm >= agora - 20 min - 1 min`, `inicioJanelaRelatos`) e `orderBy('criadoEm', descending: true)` com `limit`: sem isso o limite podia ser preenchido por relatos antigos do mesmo geohash e um relato novo do mesmo trecho ficava de fora (o mapa parava de pintar o que deveria)
+	- a folga de 1 min cobre a diferença entre o relógio do aparelho e o horário do servidor gravado em `criadoEm`; o filtro fino de distância e de validade continua no cliente, que é quem decide o que pintar
+	- filtro + ordem no servidor pedem o índice composto declarado em `firestore.indexes.json` (`geo.geohashConsulta` + `criadoEm`, referenciado no `firebase.json` e usado pelo emulador e pela produção); publicar com `firebase deploy --only firestore:indexes`
+- cada relato grava `expiraEm` (criadoEm + 20 min) e a coleção `relatos` usa esse campo na política de **TTL** do firestore, para o servidor apagar sozinho o histórico:
+	- configura uma vez por projeto: console (Databases → Time-to-live → `relatos` / `expiraEm`) ou `gcloud firestore fields ttls update expiraEm --collection-group=relatos`
+	- a exclusão é assíncrona (não acontece no minuto do vencimento) e **não** roda no emulador: quem garante que o mapa só pinte relato válido é a consulta/janela no cliente
+	- o SDK do cliente não lê `request.time` nem soma duração a um `serverTimestamp`, então `expiraEm` sai do relógio do aparelho; as regras aceitam só o que fica a menos de 1 min de `request.time + 20 min`, o que impede um cliente de escolher o próprio prazo (ou um "nunca expira")
+
+### como testar (issue #28)
+
+1. `flutter test test/relatos_repository_test.dart` — limite cheio de relatos antigos no mesmo geohash e um relato novo do mesmo trecho continua aparecendo e pintando
+2. com o emulador: `docker-compose up --build`, criar um relato antigo pela UI (http://localhost:4000 → `relatos`, com `criadoEm` no passado e `geo.geohashConsulta` de uma célula do centro) e conferir que o mapa só pinta os relatos dentro da validade
+3. `python -m unittest discover -s tools/pipeline -v` continua passando (o contrato do `trechoId` não mudou)
+
 
 ## pipeline de trechos (overture) e semeadura no emulador
 

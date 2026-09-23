@@ -11,6 +11,10 @@ import 'package:achar_vagas_app/geo/geohash.dart';
 import 'package:achar_vagas_app/geo/trecho_id.dart';
 import 'package:latlong2/latlong.dart';
 
+/// validade do relato para pintar o mapa e prazo da politica de TTL da
+/// colecao `relatos` (o mesmo valor vira o campo `expiraEm`).
+const Duration validadeRelatoPadrao = Duration(minutes: 20);
+
 enum TipoRelato { vaga, lotado, saindo }
 
 extension TipoRelatoTexto on TipoRelato {
@@ -90,6 +94,9 @@ class Relato {
 
   final double? precisaoM;
   final DateTime criadoEm;
+
+  /// [criadoEm] mais [validadeRelatoPadrao]: valor gravado em `expiraEm` (TTL).
+  DateTime get expiraEm => criadoEm.add(validadeRelatoPadrao);
 
   /// `true` enquanto o relato ainda vale para pintar o mapa.
   bool validoEm(DateTime agora, Duration validade) =>
