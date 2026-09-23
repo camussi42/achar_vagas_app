@@ -8,6 +8,7 @@ import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
+import 'package:achar_vagas_app/ui/detalhe_trecho.dart';
 import 'package:achar_vagas_app/ui/tela_mapa.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -60,6 +61,20 @@ void main() {
 
   MapCamera cameraDoMapa(WidgetTester tester) =>
       MapCamera.of(tester.element(find.byType(TileLayer)));
+
+  /// relato valido (3 min atras) no ponto fixo.
+  Relato relatoDeTeste(TrechoId trecho, TipoRelato tipo) => Relato.novo(
+        uid: 'teste',
+        trechoId: trecho,
+        tipo: tipo,
+        ponto: pontoFixo,
+        criadoEm: DateTime.now().toUtc().subtract(const Duration(minutes: 3)),
+      );
+
+  /// posicao na tela de um ponto do mapa (para `tester.tapAt`).
+  Offset naTela(WidgetTester tester, LatLng ponto) =>
+      tester.getTopLeft(find.byType(FlutterMap)) +
+      cameraDoMapa(tester).latLngToScreenOffset(ponto);
 
   testWidgets('mostra o mapa, os botoes de relato e a legenda', (tester) async {
     await abrir(
@@ -186,6 +201,73 @@ void main() {
     expect(camera.center.longitude, closeTo(pontoFixo.longitude, 1e-6));
     expect(camera.zoom, zoomUsuarioMapa);
     expect(find.byKey(chaveMarcadorUsuario), findsOneWidget);
+  });
+
+  testWidgets('tocar na linha do trecho abre o detalhe com via, estado e idade',
+      (tester) async {
+    final relatos = RelatosMemoria();
+    await relatos.criar(
+      relatoDeTeste(TrechoId.overture(uuid), TipoRelato.vaga),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+        trechos: <Trecho>[trechoDeTeste(pontoFixo)],
+      ),
+    );
+
+    // o toque cai no meio da geometria.
+    await tester.tapAt(naTela(tester, pontoFixo));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(chaveDetalheTrecho), findsOneWidget);
+    expect(find.text('Rua São Paulo'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.text('Com vaga'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('1 relato válido nos últimos 20 min'), findsOneWidget);
+    expect(find.text('Relato mais recente: há 3 min'), findsOneWidget);
+  });
+
+  testWidgets('tocar no circulo do fallback abre o detalhe da area aproximada',
+      (tester) async {
+    final relatos = RelatosMemoria();
+    final idAproximado = Trecho.aproximado(pontoFixo).id;
+    await relatos.criar(relatoDeTeste(idAproximado, TipoRelato.lotado));
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+      ),
+    );
+
+    // sem trecho canonico o relato vira circulo na celula do geohash.
+    final celula = geohashCaixa(idAproximado.chave);
+    await tester.tapAt(naTela(tester, celula.centro));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(chaveDetalheTrecho), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.textContaining('Área aproximada'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.text('Lotado'),
+      ),
+      findsOneWidget,
+    );
   });
 }
 
