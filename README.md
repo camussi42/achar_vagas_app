@@ -58,13 +58,16 @@ a tela inicial e o mapa (OpenStreetMap via `flutter_map`), centralizado no centr
 
 sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com os **40 trechos reais** do centro de Campo Mourao (`lib/data/trechos_demo_gerado.dart`) e relatos em memoria: da para navegar e ver as cores funcionando sem nenhum servico externo.
 
+- avisos na tela (issue #29): sempre que o app esta sem backend aparece uma **faixa** no topo do mapa — `modo demonstração: relatos locais, sem backend` + o motivo que o `bootstrapFirebase` registrou (`MotivoSemFirebase`, em `lib/ambiente.dart`): `firebase_options` vazio, `initializeApp` sem conexão ou auth anônimo recusado
+- falha de leitura em tempo de execução (stream de relatos ou consulta de trechos) também vira faixa: o mapa continua útil, só avisa que os relatos podem estar desatualizados; a faixa sai quando os dados voltam
+- `lib/ui/faixa_aviso.dart` concentra as faixas: e aviso, nao tela de erro
 - `lib/ambiente.dart` monta as dependencias (firebase ou demonstracao) e `lib/config.dart` guarda centro, zoom, raios e a URL dos tiles
 - a tela so conversa com as interfaces de `lib/services/`, por isso os testes rodam sem rede, sem GPS e sem Firebase
 
 ## como testar o mapa
 
 ```bash
-flutter test          # geohash, trechoId, estado por trecho, camadas e tela do mapa
+flutter test          # geohash, trechoId, estado por trecho, camadas, tela do mapa, bootstrap e faixas
 flutter analyze
 ```
 
@@ -72,6 +75,8 @@ flutter analyze
 	- no web o navegador so entrega GPS em contexto seguro (`http://localhost` ou HTTPS)
 	- relatar "tem vaga" no centro: o trecho fica verde por 20 min; relatar "lotado" depois muda a cor (o relato mais recente manda)
 	- em rua fora da malha importada aparece um circulo na area aproximada, em vez de linha
+	- modo demonstracao: rode sem `firebase_options` preenchido e confira a faixa "modo demonstração" no topo do mapa
+	- sem conexao em tempo de execucao: com o app aberto e o emulador no ar, pare o backend (`docker-compose stop firebase`) e confira a faixa de relatos desatualizados
 
 ## regras do firestore
 

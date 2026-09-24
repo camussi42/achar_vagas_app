@@ -7,6 +7,7 @@ import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
+import 'package:achar_vagas_app/ui/faixa_aviso.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
 import 'package:achar_vagas_app/ui/tela_mapa.dart';
 import 'package:flutter/material.dart';
@@ -41,17 +42,22 @@ void main() {
         ],
       );
 
+  /// [usandoFirebase] e [motivo] controlam o aviso do topo do mapa (issue #29)
+  /// e os repositorios podem ser trocados por fakes que falham.
   AmbienteApp ambienteCom({
     required LocalizacaoService localizacao,
-    RelatosMemoria? relatos,
-    List<Trecho> trechos = const <Trecho>[],
+    RelatosRepository? relatos,
+    TrechosRepository? trechos,
+    bool usandoFirebase = false,
+    MotivoSemFirebase motivo = MotivoSemFirebase.naoConfigurado,
   }) =>
       AmbienteApp(
-        usandoFirebase: false,
+        usandoFirebase: usandoFirebase,
         uid: 'teste',
+        motivoSemFirebase: usandoFirebase ? null : motivo,
         localizacao: localizacao,
         relatos: relatos ?? RelatosMemoria(),
-        trechos: TrechosMemoria(trechos),
+        trechos: trechos ?? TrechosMemoria(),
       );
 
   Future<void> abrir(WidgetTester tester, AmbienteApp ambiente) async {
@@ -228,7 +234,7 @@ void main() {
       ambienteCom(
         localizacao: const LocalizacaoFixa(pontoFixo),
         relatos: relatos,
-        trechos: <Trecho>[trechoDeTeste(pontoFixo)],
+        trechos: TrechosMemoria(<Trecho>[trechoDeTeste(pontoFixo)]),
       ),
     );
 
@@ -291,6 +297,67 @@ void main() {
     expect(camera.zoom, zoomUsuarioMapa);
     expect(find.byKey(chaveMarcadorUsuario), findsOneWidget);
   });
+
+  testWidgets('modo demonstracao mostra a faixa com o motivo', (tester) async {
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const LocalizacaoFixa(centroCampoMourao),
+        motivo: MotivoSemFirebase.semConexao,
+      ),
+    );
+
+    expect(find.byKey(chaveFaixaDemonstracao), findsOneWidget);
+    expect(find.textContaining('Modo demonstração'), findsOneWidget);
+    expect(find.textContaining('não foi possível conectar'), findsOneWidget);
+    expect(find.byKey(chaveFaixaSemDados), findsNothing);
+  });
+
+  testWidgets('ambiente firebase nao mostra a faixa de demonstracao',
+      (tester) async {
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const LocalizacaoFixa(centroCampoMourao),
+        usandoFirebase: true,
+      ),
+    );
+
+    expect(find.byKey(chaveFaixaDemonstracao), findsNothing);
+    expect(find.byKey(chaveFaixaSemDados), findsNothing);
+  });
+
+  testWidgets('falha dos relatos em tempo de execucao mostra a faixa',
+      (tester) async {
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const LocalizacaoFixa(centroCampoMourao),
+        usandoFirebase: true,
+        relatos: _RelatosQueFalham(),
+      ),
+    );
+
+    expect(find.byKey(chaveFaixaSemDados), findsOneWidget);
+    expect(find.textContaining('o mapa pode estar desatualizado'),
+        findsOneWidget);
+    expect(find.byKey(chaveFaixaDemonstracao), findsNothing);
+  });
+
+  testWidgets('falha da consulta de trechos tambem mostra a faixa',
+      (tester) async {
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const LocalizacaoFixa(centroCampoMourao),
+        usandoFirebase: true,
+        trechos: _TrechosQueFalham(),
+      ),
+    );
+
+    expect(find.byKey(chaveFaixaSemDados), findsOneWidget);
+    expect(find.byKey(chaveFaixaDemonstracao), findsNothing);
+  });
 }
 
 /// Sem acesso a localizacao: devolve sempre o [motivo] informado e registra se
@@ -346,4 +413,37 @@ class _LocalizacaoContada implements LocalizacaoService {
 
   @override
   Future<void> abrirConfiguracoesDeLocalizacao() async {}
+}
+
+/// Relatos que sempre falham: simula base/rede fora em tempo de execucao.
+class _RelatosQueFalham implements RelatosRepository {
+  @override
+  Future<Relato> criar(Relato relato) => throw StateError('sem backend');
+
+  @override
+  Future<List<Relato>> buscarProximos(
+    LatLng centro, {
+    double raioM = raioConsultaPadraoM,
+    int limite = limiteConsultaPadrao,
+  }) =>
+      throw StateError('sem backend');
+
+  @override
+  Stream<List<Relato>> observarProximos(
+    LatLng centro, {
+    double raioM = raioConsultaPadraoM,
+    int limite = limiteConsultaPadrao,
+  }) =>
+      Stream<List<Relato>>.error(StateError('sem backend'));
+}
+
+/// Trechos que sempre falham: a malha canonica fica indisponivel.
+class _TrechosQueFalham implements TrechosRepository {
+  @override
+  Future<List<Trecho>> candidatosProximos(
+    LatLng centro, {
+    double raioM = 150,
+    int limite = 40,
+  }) =>
+      throw StateError('sem backend');
 }

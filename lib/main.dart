@@ -11,7 +11,11 @@ Future<void> main() async {
     AcharVagasApp(
       ambiente: boot.usingFirebase
           ? AmbienteApp.firebase(uid: boot.uid)
-          : AmbienteApp.demonstracao(),
+          // O motivo vem do bootstrap: a faixa do topo do mapa mostra ele (#29).
+          : AmbienteApp.demonstracao(
+              motivo: boot.motivoSemFirebase ??
+                  MotivoSemFirebase.naoConfigurado,
+            ),
     ),
   );
 }
