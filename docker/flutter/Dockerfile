@@ -34,4 +34,6 @@ RUN ln -sf /opt/flutter/bin/flutter /usr/local/bin/flutter \
 
 WORKDIR /app
 EXPOSE 5000
-ENTRYPOINT ["bash", "-lc", "flutter pub get && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5000"]
+# `USAR_EMULADOR=true` liga os emuladores do compose (auth 9099 e firestore 8080);
+# o host e o `localhost` do navegador e nao o `firebase` da rede interna.
+ENTRYPOINT ["bash", "-lc", "flutter pub get && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5000 --dart-define=USAR_EMULADOR=true --dart-define=HOST_EMULADOR=localhost"]

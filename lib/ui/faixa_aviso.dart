@@ -32,7 +32,7 @@ class FaixaAviso extends StatelessWidget {
 
   /// Faixa de falha de leitura em tempo de execucao: o mapa continua util, mas
   /// os relatos podem estar velhos.
-  FaixaAviso.semDados()
+  const FaixaAviso.semDados()
       : this(
           key: chaveFaixaSemDados,
           icone: Icons.cloud_off,

@@ -36,10 +36,38 @@ docker-compose up --build
 
 - notas úteis:
 	- os arquivos docker estão em docker/ e o compose na raiz (docker-compose.yml)
-	- dados do emulador são gravados em emulator-data/ para persistência entre execuções
+	- **o app do container já sobe apontado para os emuladores** (`--dart-define=USAR_EMULADOR=true`, veja a seção "app apontado para os emuladores")
+	- o que persiste: `emulator-data/` guarda `trechos` e `relatos` entre execuções (`--import=./emulator-data` e `--export-on-exit=./emulator-data` no container do firebase)
+		- o export acontece na saída limpa do emulador: o `docker-compose down` manda SIGINT (veja o `STOPSIGNAL` do `docker/firebase/Dockerfile`) e o compose espera até 30s (`stop_grace_period`)
+		- a pasta é ignorada pelo git (só `emulator-data/.gitkeep` é versionado)
+		- para limpar de verdade, apague `emulator-data/` menos o `.gitkeep`: o compose usa bind mount, então nem `docker-compose down -v` remove a pasta
 	- parar: ctrl+c no terminal ou `docker-compose down`
 	- se mudar dependências e quiser forçar rebuild: `docker-compose up --build --force-recreate`
 	- caso o container flutter abra problemas, rode `flutter pub get` localmente ou inspecione os logs do container
+
+## app apontado para os emuladores (issue #24)
+
+por padrão o app fala com o firebase de verdade (com `firebase_options` preenchido) ou sobe em modo demonstração (sem ele). com a flag do build ligada ele passa a escrever/ler nos emuladores do docker-compose:
+
+```bash
+# flutter web do docker-compose: a flag já vem no docker/flutter/Dockerfile
+docker-compose up --build
+
+# rodando o app na sua máquina
+flutter run -d chrome --dart-define=USAR_EMULADOR=true
+```
+
+- `USAR_EMULADOR=true` chama `FirebaseAuth.instance.useAuthEmulator` (9099) e `FirebaseFirestore.instance.useFirestoreEmulator` (8080) antes do login anônimo
+- `HOST_EMULADOR` (padrão `localhost`) troca o host: de dentro do navegador é `localhost` e **não** `firebase`, que é o nome do serviço visto de dentro do outro container
+	- no emulador do android o `localhost` vira `10.0.2.2` sozinho, pelo host mapping do próprio SDK
+- com a flag ligada o `firebase_options.dart` é ignorado: o app usa o projeto local `demo-achar-vagas` (o mesmo do `.firebaserc` e do `semear_firestore.py`), porque é lá que a semente de `trechos` fica — `--dart-define=PROJETO_EMULADOR=outro` troca o projeto
+- sem a flag nada muda: release e modo demonstração continuam iguais, e as portas/projeto são os mesmos do `firebase.json`/`docker-compose.yml` (contrato coberto por `test/emulador_test.dart`)
+
+### como testar (issue #24)
+
+1. `flutter test test/emulador_test.dart`
+2. `docker-compose up --build` e abrir http://localhost:5000
+3. relatar "tem vaga": o documento aparece em `relatos` na UI do emulador (http://localhost:4000) com `criadoEm` gravado pelo servidor — e não no firebase real
 
 ## mapa, gps e relatos (issues #3, #12 e #13)
 
@@ -54,6 +82,16 @@ a tela inicial e o mapa (OpenStreetMap via `flutter_map`), centralizado no centr
 	- trecho sem relato recente **nao** e pintado (a legenda na tela mostra a cor neutra)
 - a permissao de localizacao e pedida ja na abertura; sem permissao o mapa continua em Campo Mourao e so o botao de localizacao avisa
 
+## detalhe do trecho ao tocar no mapa (issue #26)
+
+tocar num trecho pintado (linha verde/vermelha ou circulo da area aproximada) abre uma folha com o que o mapa ja calculou:
+
+- nome da via (ou `area aproximada (~N m)` no fallback geohash) e o estado atual com a cor correspondente
+- quantos relatos validos o trecho tem (com a quebra vaga / lotado / liberando) e ha quanto tempo foi o relato mais recente
+- o toque usa o hit test das camadas do `flutter_map` (`hitValue`/`hitNotifier` com o id do trecho): tocar no mapa vazio nao abre nada
+- nenhuma consulta nova ao firestore: os dados saem de `combinar` (`lib/ui/camadas_mapa.dart`), o mesmo calculo que pinta o mapa
+- o botao de rota da folha so aparece quando a tela informa o callback (ponto de extensao da issue "abrir rota ate o trecho")
+
 ## modo demonstracao (sem firebase)
 
 sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com os **40 trechos reais** do centro de Campo Mourao (`lib/data/trechos_demo_gerado.dart`) e relatos em memoria: da para navegar e ver as cores funcionando sem nenhum servico externo.
@@ -67,7 +105,7 @@ sem `firebase_options` preenchido (via `flutterfire configure`) o app sobe com o
 ## como testar o mapa
 
 ```bash
-flutter test          # geohash, trechoId, estado por trecho, camadas, tela do mapa, bootstrap e faixas
+flutter test          # geohash, trechoId, estado por trecho, camadas, detalhe, tela do mapa, bootstrap e faixas
 flutter analyze
 ```
 
@@ -82,8 +120,25 @@ flutter analyze
 
 - `firestore.rules`:
 	- `trechos`: leitura liberada para o cliente, escrita negada (quem grava é a pipeline, via Admin SDK)
-	- `relatos`: `uid` do próprio usuário, `tipo` conhecido, `geo.geopoint` como geopoint e `criadoEm == request.time` (servidor)
+	- `relatos`: `uid` do próprio usuário, `tipo` conhecido, `geo.geopoint` como geopoint, `criadoEm == request.time` (servidor) e `expiraEm` a menos de 1 min de `request.time + 20 min` (o campo do TTL, ver abaixo)
 	- o formato do `trechoId` é o **mesmo texto** no app (`lib/geo/trecho_id.dart`), nas regras (função `trechoIdValido`) e na pipeline (`tools/pipeline/trechos.py`); o teste de contrato falha se algum dos três mudar sozinho
+
+## relatos antigos: janela, indice e TTL (issue #28)
+
+- a consulta de relatos (`lib/services/relatos_repository.dart`) usa `whereIn` nas células de geohash **mais** uma janela de tempo (`criadoEm >= agora - 20 min - 1 min`, `inicioJanelaRelatos`) e `orderBy('criadoEm', descending: true)` com `limit`: sem isso o limite podia ser preenchido por relatos antigos do mesmo geohash e um relato novo do mesmo trecho ficava de fora (o mapa parava de pintar o que deveria)
+	- a folga de 1 min cobre a diferença entre o relógio do aparelho e o horário do servidor gravado em `criadoEm`; o filtro fino de distância e de validade continua no cliente, que é quem decide o que pintar
+	- filtro + ordem no servidor pedem o índice composto declarado em `firestore.indexes.json` (`geo.geohashConsulta` + `criadoEm`, referenciado no `firebase.json` e usado pelo emulador e pela produção); publicar com `firebase deploy --only firestore:indexes`
+- cada relato grava `expiraEm` (criadoEm + 20 min) e a coleção `relatos` usa esse campo na política de **TTL** do firestore, para o servidor apagar sozinho o histórico:
+	- configura uma vez por projeto: console (Databases → Time-to-live → `relatos` / `expiraEm`) ou `gcloud firestore fields ttls update expiraEm --collection-group=relatos`
+	- a exclusão é assíncrona (não acontece no minuto do vencimento) e **não** roda no emulador: quem garante que o mapa só pinte relato válido é a consulta/janela no cliente
+	- o SDK do cliente não lê `request.time` nem soma duração a um `serverTimestamp`, então `expiraEm` sai do relógio do aparelho; as regras aceitam só o que fica a menos de 1 min de `request.time + 20 min`, o que impede um cliente de escolher o próprio prazo (ou um "nunca expira")
+
+### como testar (issue #28)
+
+1. `flutter test test/relatos_repository_test.dart` — limite cheio de relatos antigos no mesmo geohash e um relato novo do mesmo trecho continua aparecendo e pintando
+2. com o emulador: `docker-compose up --build`, criar um relato antigo pela UI (http://localhost:4000 → `relatos`, com `criadoEm` no passado e `geo.geohashConsulta` de uma célula do centro) e conferir que o mapa só pinta os relatos dentro da validade
+3. `python -m unittest discover -s tools/pipeline -v` continua passando (o contrato do `trechoId` não mudou)
+
 
 ## pipeline de trechos (overture) e semeadura no emulador
 

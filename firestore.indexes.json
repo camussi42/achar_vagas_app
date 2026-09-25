@@ -1,0 +1,19 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "relatos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "geo.geohashConsulta",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "criadoEm",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

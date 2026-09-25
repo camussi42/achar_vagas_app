@@ -12,4 +12,9 @@ RUN apt-get update \
 
 WORKDIR /workspace
 EXPOSE 8080 9099 4000
-CMD ["firebase", "emulators:start", "--only", "firestore,auth", "--host", "0.0.0.0"]
+# `--import`/`--export-on-exit`: mantem a semente de `trechos` e os `relatos` na
+# pasta montada em emulator-data/ entre execucoes do compose.
+# `STOPSIGNAL SIGINT`: o firebase-tools exporta na saida limpa dele (o SIGINT do
+# ctrl+c), entao o `docker stop`/`docker-compose down` manda esse sinal agora.
+STOPSIGNAL SIGINT
+CMD ["firebase", "emulators:start", "--only", "firestore,auth", "--host", "0.0.0.0", "--import=./emulator-data", "--export-on-exit=./emulator-data"]
