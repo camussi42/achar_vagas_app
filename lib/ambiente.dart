@@ -17,6 +17,31 @@ import 'package:achar_vagas_app/services/trechos_repository.dart';
 /// Uid usado no modo demonstracao (sem Auth anonimo).
 const String uidDemonstracao = 'dev-local';
 
+/// Por que o app subiu sem backend (issue #29).
+///
+/// O `bootstrapFirebase` nunca derruba a abertura: o modo demonstracao entra no
+/// lugar do Firebase e o motivo fica registrado aqui para a tela deixar claro
+/// se as cores do mapa vem do banco ou de relatos locais.
+enum MotivoSemFirebase {
+  /// `firebase_options.dart` sem chaves (falta o `flutterfire configure`).
+  naoConfigurado,
+
+  /// `Firebase.initializeApp` falhou: rede fora ou configuracao invalida.
+  semConexao,
+
+  /// Auth anonimo recusado (provedor desativado, cota, regras).
+  autenticacaoFalhou,
+}
+
+extension MotivoSemFirebaseTexto on MotivoSemFirebase {
+  /// Detalhe curto mostrado na faixa da tela.
+  String get rotulo => switch (this) {
+        MotivoSemFirebase.naoConfigurado => 'Firebase não configurado',
+        MotivoSemFirebase.semConexao => 'não foi possível conectar',
+        MotivoSemFirebase.autenticacaoFalhou => 'falha no login anônimo',
+      };
+}
+
 class AmbienteApp {
   const AmbienteApp({
     required this.usandoFirebase,
@@ -24,10 +49,14 @@ class AmbienteApp {
     required this.localizacao,
     required this.relatos,
     required this.trechos,
+    this.motivoSemFirebase,
   });
 
   /// `false` quando o Firebase nao esta configurado (modo demonstracao).
   final bool usandoFirebase;
+
+  /// Por que o app esta sem backend (issue #29); nulo quando usa o Firebase.
+  final MotivoSemFirebase? motivoSemFirebase;
 
   /// Uid do usuario (Auth anonimo) ou [uidDemonstracao] no modo demonstracao.
   final String uid;
@@ -45,8 +74,15 @@ class AmbienteApp {
 
   /// Modo demonstracao: repositorios em memoria, semeados com os trechos reais
   /// do centro de Campo Mourao, e GPS real (quando houver permissao).
-  factory AmbienteApp.demonstracao() => AmbienteApp(
+  ///
+  /// [motivo] e o que o `bootstrapFirebase` registrou (issue #29) e vai para a
+  /// faixa que a tela mostra no topo do mapa.
+  factory AmbienteApp.demonstracao({
+    MotivoSemFirebase motivo = MotivoSemFirebase.naoConfigurado,
+  }) =>
+      AmbienteApp(
         usandoFirebase: false,
+        motivoSemFirebase: motivo,
         uid: uidDemonstracao,
         localizacao: const LocalizacaoGeolocator(),
         relatos: RelatosMemoria(),

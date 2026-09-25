@@ -1,4 +1,5 @@
 import 'package:achar_vagas_app/main.dart';
+import 'package:achar_vagas_app/ui/faixa_aviso.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -16,5 +17,8 @@ void main() {
     expect(find.text('Achar vagas'), findsOneWidget);
     expect(find.byType(FlutterMap), findsOneWidget);
     expect(find.text('Relatar o que você vê nesta via'), findsOneWidget);
+    // Issue #29: sem `firebase_options` o app avisa que esta em demonstracao.
+    expect(find.byKey(chaveFaixaDemonstracao), findsOneWidget);
+    expect(find.textContaining('Modo demonstração'), findsOneWidget);
   });
 }

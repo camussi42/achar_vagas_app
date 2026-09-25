@@ -8,7 +8,10 @@
 /// - #13 trechos pintados pelo relato mais recente (validade de 20 min), com
 ///       linha para trecho canonico e circulo para o fallback geohash;
 /// - #30 localizacao indisponivel explicada por caso, com atalho para as
-///       configuracoes do app (permissao negada) ou do sistema (GPS desligado).
+///       configuracoes do app (permissao negada) ou do sistema (GPS desligado);
+/// - #29 faixa discreta sobre o mapa quando o app esta sem backend (modo
+///       demonstracao, com o motivo que o bootstrap registrou) e quando a
+///       leitura dos relatos ou dos trechos falha em tempo de execucao.
 ///
 /// A tela nao fala com Firebase nem com `geolocator` diretamente: recebe um
 /// [AmbienteApp], o que permite rodar em modo demonstracao e testar com
@@ -27,6 +30,7 @@ import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/ui/botoes_relato.dart';
 import 'package:achar_vagas_app/ui/camadas_mapa.dart';
 import 'package:achar_vagas_app/ui/detalhe_trecho.dart';
+import 'package:achar_vagas_app/ui/faixa_aviso.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
 import 'package:achar_vagas_app/ui/paleta_estado.dart';
 import 'package:flutter/material.dart';
@@ -79,6 +83,13 @@ class _TelaMapaState extends State<TelaMapa> {
   List<TrechoEstado> _camadas = const <TrechoEstado>[];
   bool _gravando = false;
 
+  /// Leitura que falhou em tempo de execucao (issue #29): o stream de relatos e
+  /// a consulta de trechos param de alimentar o mapa sem derrubar a tela.
+  bool _falhaRelatos = false;
+  bool _falhaTrechos = false;
+
+  bool get _semDados => _falhaRelatos || _falhaTrechos;
+
   @override
   void initState() {
     super.initState();
@@ -114,14 +125,20 @@ class _TelaMapaState extends State<TelaMapa> {
         .observarProximos(centro, raioM: raioRelatosMapaM)
         .listen(
           _receberRelatos,
-          // Sem banco/rede o mapa continua util: a camada so nao pinta nada.
-          onError: (Object _) {},
+          // Sem banco/rede o mapa continua util (a camada so nao pinta nada),
+          // mas o usuario precisa saber que os dados podem estar velhos (#29).
+          onError: (Object _) {
+            if (!mounted) return;
+            setState(() => _falhaRelatos = true);
+          },
         );
   }
 
   void _receberRelatos(List<Relato> relatos) {
     if (!mounted) return;
     _relatos = relatos;
+    // Chegou leitura nova: o aviso de dados velhos sai (issue #29).
+    _falhaRelatos = false;
     _recalcular();
   }
 
@@ -143,9 +160,14 @@ class _TelaMapaState extends State<TelaMapa> {
       );
       if (!mounted) return;
       _trechos = trechos;
+      _falhaTrechos = false;
       _recalcular();
     } catch (_) {
-      // Base indisponivel: trecho canonico vira circulo, sem quebrar a tela.
+      // Base indisponivel: trecho canonico vira circulo e a faixa avisa que os
+      // dados podem estar velhos, sem quebrar a tela (issue #29).
+      if (!mounted) return;
+      _falhaTrechos = true;
+      _recalcular();
     }
   }
 
@@ -356,6 +378,27 @@ class _TelaMapaState extends State<TelaMapa> {
         ),
       );
 
+  /// Faixas de aviso sobre o mapa (issue #29): modo demonstracao e/ou leitura
+  /// que falhou em tempo de execucao. Nenhuma delas e tela de erro: o mapa
+  /// continua util, so nao da mais para dizer que as cores vem do banco.
+  Widget? _faixas() {
+    final demonstracao = !widget.ambiente.usandoFirebase;
+    if (!demonstracao && !_semDados) return null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (demonstracao)
+          FaixaAviso.demonstracao(
+            motivo: widget.ambiente.motivoSemFirebase ??
+                MotivoSemFirebase.naoConfigurado,
+          ),
+        if (demonstracao && _semDados) const SizedBox(height: 4),
+        if (_semDados) FaixaAviso.semDados(),
+      ],
+    );
+  }
+
   Widget _painel(BuildContext context) => Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -373,6 +416,7 @@ class _TelaMapaState extends State<TelaMapa> {
 
   @override
   Widget build(BuildContext context) {
+    final faixas = _faixas();
     return Scaffold(
       appBar: AppBar(title: const Text('Achar vagas')),
       body: Column(
@@ -431,6 +475,13 @@ class _TelaMapaState extends State<TelaMapa> {
                     ),
                   ],
                 ),
+                if (faixas != null)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    right: 8,
+                    child: faixas,
+                  ),
                 Positioned(
                   right: 12,
                   bottom: 12,
