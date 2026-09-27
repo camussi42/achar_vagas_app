@@ -6,6 +6,7 @@ import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
+import 'package:achar_vagas_app/services/rota.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
 import 'package:achar_vagas_app/ui/faixa_aviso.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
@@ -44,13 +45,15 @@ void main() {
       );
 
   /// [usandoFirebase] e [motivo] controlam o aviso do topo do mapa (issue #29)
-  /// e os repositorios podem ser trocados por fakes que falham.
+  /// e os repositorios podem ser trocados por fakes que falham; [rota] e o
+  /// duble do encaminhamento para o app de mapas (issue #27).
   AmbienteApp ambienteCom({
     required LocalizacaoService localizacao,
     RelatosRepository? relatos,
     TrechosRepository? trechos,
     bool usandoFirebase = false,
     MotivoSemFirebase motivo = MotivoSemFirebase.naoConfigurado,
+    RotaService rota = const RotaUrlLauncher(),
   }) =>
       AmbienteApp(
         usandoFirebase: usandoFirebase,
@@ -59,6 +62,7 @@ void main() {
         localizacao: localizacao,
         relatos: relatos ?? RelatosMemoria(),
         trechos: trechos ?? TrechosMemoria(),
+        rota: rota,
       );
 
   Future<void> abrir(WidgetTester tester, AmbienteApp ambiente) async {
@@ -439,6 +443,84 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('o detalhe abre a rota no app de mapas ate o ponto do trecho',
+      (tester) async {
+    final relatos = RelatosMemoria();
+    final rota = _RotaFalsa();
+    await relatos.criar(
+      relatoDeTeste(TrechoId.overture(uuid), TipoRelato.vaga),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+        trechos: TrechosMemoria(<Trecho>[trechoDeTeste(pontoFixo)]),
+        rota: rota,
+      ),
+    );
+
+    await tester.tapAt(naTela(tester, pontoFixo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(chaveBotaoIrAteTrecho));
+    await tester.pumpAndSettle();
+
+    expect(rota.chamadas, 1);
+    // destino e o centroide; rotulo e o nome da via.
+    expect(rota.destino, pontoFixo);
+    expect(rota.rotulo, 'Rua São Paulo');
+    // a folha fecha antes de sair para o app de mapas.
+    expect(find.byKey(chaveDetalheTrecho), findsNothing);
+  });
+
+  testWidgets('sem app de mapas a tela avisa em vez de lancar', (tester) async {
+    final relatos = RelatosMemoria();
+    final rota = _RotaFalsa(abre: false);
+    await relatos.criar(
+      relatoDeTeste(TrechoId.overture(uuid), TipoRelato.vaga),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+        trechos: TrechosMemoria(<Trecho>[trechoDeTeste(pontoFixo)]),
+        rota: rota,
+      ),
+    );
+
+    await tester.tapAt(naTela(tester, pontoFixo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(chaveBotaoIrAteTrecho));
+    await tester.pumpAndSettle();
+
+    expect(rota.chamadas, 1);
+    expect(
+      find.text('Nenhum app de mapas disponível para abrir a rota.'),
+      findsOneWidget,
+    );
+  });
+}
+
+/// rota falsa: guarda o que a tela pediu e responde o que o teste mandar.
+class _RotaFalsa implements RotaService {
+  _RotaFalsa({this.abre = true});
+
+  /// `false` simula nenhum app de mapas instalado.
+  final bool abre;
+
+  int chamadas = 0;
+  LatLng? destino;
+  String? rotulo;
+
+  @override
+  Future<bool> abrir(LatLng destino, {String? rotulo}) async {
+    chamadas++;
+    this.destino = destino;
+    this.rotulo = rotulo;
+    return abre;
+  }
 }
 
 /// sem permissao/servico de GPS: nunca ha posicao. Fake dos testes de detalhe
