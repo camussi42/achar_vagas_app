@@ -185,10 +185,55 @@ python tools/pipeline/semear_firestore.py --arquivo trechos.ndjson --limpar
 	- bash: `export FIRESTORE_EMULATOR_HOST=localhost:8080`
 	- de dentro do container o host é o nome do serviço: `firebase:8080`
 - conferir os documentos em http://localhost:4000 (UI do emulador) → Firestore → `trechos`
+- com `--credenciais` o mesmo seeder grava no **projeto real** em vez do emulador (ver "publicar a v1" abaixo)
 - testes da pipeline (geohash, recorte por esquina e contrato app/rules/pipeline):
 
 ```bash
 python -m unittest discover -s tools/pipeline -v
 ```
+
+## publicar a v1 (issue #37)
+
+do zero até a URL pública. precisa de node instalado (`npm install -g firebase-tools`) e de permissão no projeto do Firebase.
+
+```bash
+# 1) apontar o repositório para o projeto real (escreve o alias em .firebaserc)
+firebase login
+firebase use --add          # escolha o projeto e o alias "producao"
+
+# 2) encher o firebase_options.dart (web + android)
+flutterfire configure
+
+# 3) build web + deploy do site, das regras e do índice
+flutter build web --release
+firebase deploy --only hosting,firestore:rules,firestore:indexes
+```
+
+- antes do deploy, ligar o provedor **Anônimo** no console (Authentication → Sign-in method): sem ele o login do app falha e cai no modo demonstração
+- o `firebase.json` já tem a seção `hosting` apontando para `build/web`; o `firestore.rules`/`firestore.indexes.json` do repositório são os mesmos que sobem (o índice `geo.geohashConsulta` + `criadoEm` é obrigatório para a consulta de relatos)
+- o site fica em `https://<projectId>.web.app` (a URL aparece no fim do deploy): **URL publicada:** _preencher depois do primeiro deploy_
+
+semente de `trechos` no projeto real (a base viária é lida pelo app e não pode ser forjada pelo cliente, então quem grava é o seeder com chave de service account):
+
+```bash
+# console → Configurações do projeto → Contas de serviço → Gerar nova chave privada
+# (o json baixado é ignorado pelo git; rode o comando com o caminho dele)
+python tools/pipeline/semear_firestore.py --arquivo trechos.ndjson --limpar --projeto <projectId> --credenciais chave-service-account.json
+```
+
+- `--credenciais` troca o emulador pelo firestore real e ignora `FIRESTORE_EMULATOR_HOST` (sem a flag o comportamento é o de sempre)
+
+TTL de `expiraEm` (uma vez por projeto, apaga o histórico de relatos no servidor):
+
+```bash
+gcloud firestore fields ttls update expiraEm --collection-group=relatos --project=<projectId>
+```
+
+### como testar (issue #37)
+
+1. abrir a URL publicada e criar um relato pelo app: o mapa pinta o trecho canônico (a linha da via, não o círculo)
+2. conferir no console que o relato some da consulta em ~20 min (janela no cliente + TTL no servidor)
+3. `python -m unittest discover -s tools/pipeline -v` (o seeder com `--credenciais` tem teste na CLI)
+
 
 

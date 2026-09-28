@@ -51,3 +51,8 @@ app.*.map.json
 # nao entram no git. O .gitkeep e versionado so para a pasta existir no start.
 /emulator-data/*
 !/emulator-data/.gitkeep
+
+# Chave de service account usada pelo seeder no projeto real (issue #37): nunca
+# vai para o git.
+*-firebase-adminsdk*.json
+service-account*.json

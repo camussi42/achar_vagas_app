@@ -597,10 +597,23 @@ class SemeadorTest(unittest.TestCase):
         self.assertEqual(argumentos.arquivo, Path("trechos.ndjson"))
         self.assertEqual(argumentos.projeto, "demo-achar-vagas")
         self.assertFalse(argumentos.limpar)
+        self.assertIsNone(argumentos.credenciais)
         self.assertEqual(
             semear_firestore.validar_emulador(argumentos.emulador),
             argumentos.emulador,
         )
+
+    def test_cli_aponta_para_o_produto_com_credenciais(self):
+        argumentos = semear_firestore.criar_parser().parse_args(
+            ["--projeto", "meu-projeto", "--credenciais", "chave.json"]
+        )
+
+        self.assertEqual(argumentos.projeto, "meu-projeto")
+        self.assertEqual(argumentos.credenciais, Path("chave.json"))
+
+    def test_producao_exige_a_chave_no_disco(self):
+        with self.assertRaises(SystemExit):
+            semear_firestore.cliente_producao(Path("nao-existe.json"), "p")
 
 
 
