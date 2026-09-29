@@ -1,0 +1,43 @@
+# Testes das `firestore.rules` no emulador (issue #39).
+#
+# `emulators:exec` sobe o firestore e o auth, roda o comando e derruba tudo: se
+# o emulador nao subir, o job falha (a suite nao passa "por falta de emulador").
+# O CI de `flutter analyze`/`flutter test`/pipeline e a issue #40, em workflow
+# separado — este aqui precisa de java e node por causa do emulador.
+name: regras do firestore
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  emulador:
+    name: firestore.rules no emulador
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # firebase-tools 15 pede node >= 20, e o emulador do firestore roda em
+      # java 21+ (o runner ja tem, mas a versao fica explicita).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: npm install -g firebase-tools@15
+
+      # mesmo comando do README; `demo-achar-vagas` e o projeto do `.firebaserc`
+      # (prefixo `demo-`: nada aqui toca o firebase real)
+      - name: roda a suite das regras
+        run: firebase emulators:exec --only firestore,auth --project demo-achar-vagas "flutter test test_emulador"
