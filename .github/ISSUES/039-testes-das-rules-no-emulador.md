@@ -66,6 +66,11 @@ decisoes:
 	reaproveitado entre execucoes)
 - o job de CI que precisa de emulador entra aqui; o CI de `flutter analyze`,
 	`flutter test` e pipeline e a issue #40 (outro workflow)
+- o workflow fixa o SHA da `subosito/flutter-action` (`# v2.23.0`) e a versao
+	exata do `firebase-tools` (`@15.32.0` com `--ignore-scripts`), e o
+	`flutter pub get` usa `--enforce-lockfile`: sao os achados do SonarCloud
+	(`githubactions:S7637`, `S6505`, `S8543`, `S8550`) para action de terceiro sem
+	pin, instalacao sem versao travada e scripts de ciclo de vida do npm
 
 notas:
 
