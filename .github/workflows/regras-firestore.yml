@@ -29,13 +29,19 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: subosito/flutter-action@v2
+      # pinada por commit: o SonarCloud (githubactions:S7637) exige o SHA cheio
+      # das actions de terceiros; a tag fica no comentario.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           cache: true
 
-      - run: flutter pub get
-      - run: npm install -g firebase-tools@15
+      # `--enforce-lockfile`: usa o `pubspec.lock` versionado e falha se ele
+      # precisaria mudar (mesma versao da SDK do docker/flutter/Dockerfile).
+      - run: flutter pub get --enforce-lockfile
+      # versao exata + `--ignore-scripts` (os scripts de ciclo de vida do npm
+      # sao o que o SonarCloud pede para nao rodar: s6505/s8543/s8550)
+      - run: npm install -g firebase-tools@15.32.0 --ignore-scripts
 
       # mesmo comando do README; `demo-achar-vagas` e o projeto do `.firebaserc`
       # (prefixo `demo-`: nada aqui toca o firebase real)
