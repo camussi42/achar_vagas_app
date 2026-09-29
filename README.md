@@ -129,6 +129,8 @@ flutter test          # geohash, trechoId, estado por trecho, camadas, detalhe, 
 flutter analyze
 ```
 
+- as regras do firestore têm suíte própria, que precisa do emulador: `test_emulador/` (ver "testes das regras no emulador", abaixo)
+
 - com docker: `docker-compose up --build` e abrir http://localhost:5000
 	- no web o navegador so entrega GPS em contexto seguro (`http://localhost` ou HTTPS)
 	- relatar "tem vaga" no centro: o trecho fica verde por 20 min; relatar "lotado" depois muda a cor (o relato mais recente manda)
@@ -142,6 +144,28 @@ flutter analyze
 	- `trechos`: leitura liberada para o cliente, escrita negada (quem grava é a pipeline, via Admin SDK)
 	- `relatos`: `uid` do próprio usuário, `tipo` conhecido, `geo.geopoint` como geopoint, `criadoEm == request.time` (servidor) e `expiraEm` a menos de 1 min de `request.time + 20 min` (o campo do TTL, ver abaixo)
 	- o formato do `trechoId` é o **mesmo texto** no app (`lib/geo/trecho_id.dart`), nas regras (função `trechoIdValido`) e na pipeline (`tools/pipeline/trechos.py`); o teste de contrato falha se algum dos três mudar sozinho
+
+### testes das regras no emulador (issue #39)
+
+`test_emulador/` roda as `firestore.rules` **no emulador**, com o rules engine de verdade avaliando cada gravação/leitura. As chamadas são as mesmas que o SDK faz por baixo (`:commit` no firestore e login anônimo no emulador do auth), porque `flutter test` roda na VM do Dart, sem canal de plataforma para o `cloud_firestore`:
+
+```bash
+# com o emulador do docker-compose de pé (persiste no emulator-data/)
+docker-compose up -d firebase
+flutter test test_emulador
+
+# ou tudo junto, sem docker: sobe o emulador, roda e derruba (é o comando do CI)
+firebase emulators:exec --only firestore,auth "flutter test test_emulador"
+```
+
+- `test_emulador/regras_firestore_test.dart`: `uid` de outro usuário (e sem `uid`), `tipo` fora de `vaga/lotado/saindo`, `trechoId` fora do padrão (inclui `gers:xpto` e `gers:<uuid>@0.5`), `geo` sem geopoint/geohash/geohashConsulta, `expiraEm` fora da tolerância de 1 min (1 hora, 2 min, já vencido), `expiraEm`/`criadoEm` como texto, `criadoEm` vindo do relógio do aparelho, gravação sem login, `read` de `relatos` sem login, `trechos` (leitura pública e escrita negada) e `update`/`delete` de relato
+	- o caminho feliz monta o documento pelo próprio modelo do app (`Relato.novo`, os mesmos campos de `RelatosFirestore.criar`), então o teste prova que **o que o app grava passa** pelas regras
+	- o `criadoEm` do servidor vai como transformação (`updateTransforms` + `REQUEST_TIME`), que é o formato que o `FieldValue.serverTimestamp()` manda; é por isso que `criadoEm == request.time` vale
+	- negativa das regras é afirmada como `403 PERMISSION_DENIED` (e não só "não passou"), então um payload errado (400) não se passa por negativa
+- `test_emulador/apoio_emulador_test.dart`: o que dá para conferir **sem** emulador (formato das escritas e endereços dos emuladores); roda com `flutter test`
+- a suíte **não** roda junto com `flutter test` (que precisa continuar passando sem docker): sem emulador no ar ela falha dizendo como subir, e uma suíte que passa sem emulador não provaria nada
+- para conferir que ela pega uma regra afrouxada: aceite `expiraEm` com 1 hora em `firestore.rules` e rode de novo — o caso `expiraEm uma hora depois (prazo escolhido pelo cliente)` falha; o mesmo vale para tirar o `uid == request.auth.uid`
+- `.github/workflows/regras-firestore.yml` roda o mesmo comando em `pull_request` e em `push` na `main` (o CI de `flutter analyze`/`flutter test`/pipeline é a issue #40)
 
 ## relatos antigos: janela, indice e TTL (issue #28)
 
