@@ -9,7 +9,7 @@ void main() {
 
   test('sem firebase_options o bootstrap explica o modo demonstracao',
       () async {
-    final boot = await bootstrapFirebase();
+    final boot = await bootstrapFirebase(opcoesDoProjeto: () => null);
 
     expect(boot.usingFirebase, isFalse);
     expect(boot.motivoSemFirebase, MotivoSemFirebase.naoConfigurado);

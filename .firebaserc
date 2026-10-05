@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "demo-achar-vagas"
-  }
+    "default": "demo-achar-vagas",
+    "producao": "achar-vagas"
+  },
+  "targets": {},
+  "etags": {}
 }

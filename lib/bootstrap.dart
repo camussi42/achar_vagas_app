@@ -80,6 +80,15 @@ class FirebaseBootstrap {
   final MotivoSemFirebase? motivoSemFirebase;
 }
 
+FirebaseOptions? _opcoesReais() {
+  try {
+    final opcoes = DefaultFirebaseOptions.currentPlatform;
+    return opcoes.apiKey.isEmpty ? null : opcoes;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Sobe o Firebase sem derrubar o app quando algo falta.
 ///
 /// Antes a falha era silenciosa (`catch (_)`) e quem usava o app nao sabia se
@@ -92,10 +101,12 @@ class FirebaseBootstrap {
 /// firebase real).
 Future<FirebaseBootstrap> bootstrapFirebase({
   ConfiguracaoEmulador? emulador,
+  FirebaseOptions? Function()? opcoesDoProjeto,
 }) async {
   final config = emulador ?? configuracaoEmulador();
-  final options =
-      config.ligado ? opcoesEmuladorLocal : DefaultFirebaseOptions.currentOrNull;
+  final options = config.ligado
+      ? opcoesEmuladorLocal
+      : (opcoesDoProjeto ?? _opcoesReais)();
   if (options == null) {
     return const FirebaseBootstrap.demonstracao(
       MotivoSemFirebase.naoConfigurado,

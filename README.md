@@ -177,16 +177,15 @@ python -m unittest discover -s tools/pipeline -v
 do zero até a URL pública. precisa de node instalado (`npm install -g firebase-tools`) e de permissão no projeto do Firebase.
 
 ```bash
-# 1) apontar o repositório para o projeto real (escreve o alias em .firebaserc)
+# 1) apontar o repositório para o projeto real (o alias "producao" já está no .firebaserc)
 firebase login
-firebase use --add          # escolha o projeto e o alias "producao"
 
 # 2) encher o firebase_options.dart (web + android)
 flutterfire configure
 
 # 3) build web + deploy do site, das regras e do índice
 flutter build web --release
-firebase deploy --only hosting,firestore:rules,firestore:indexes
+firebase deploy --project producao --only hosting,firestore:rules,firestore:indexes
 ```
 
 - antes do deploy, ligar o provedor **Anônimo** no console (Authentication → Sign-in method): sem ele o login do app falha e cai no modo demonstração
