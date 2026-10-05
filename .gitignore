@@ -56,3 +56,10 @@ app.*.map.json
 # vai para o git.
 *-firebase-adminsdk*.json
 service-account*.json
+
+# Artefatos locais: cache do firebase-tools (.firebase/) e dados gerados pela
+# pipeline de trechos (export_trechos.py -> trechos.ndjson / segmentos baixados).
+/.firebase/
+/trechos.ndjson
+/segmentos_overture.geojson
+/segmentos_overture.geojson.state

@@ -26,5 +26,25 @@
       "port": 4000
     },
     "singleProjectMode": true
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "achar-vagas",
+          "appId": "1:179911606041:android:e844fb7865c52d689a4f88",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "achar-vagas",
+          "configurations": {
+            "android": "1:179911606041:android:e844fb7865c52d689a4f88",
+            "web": "1:179911606041:web:386ed59434f6e73a9a4f88"
+          }
+        }
+      }
+    }
   }
 }
