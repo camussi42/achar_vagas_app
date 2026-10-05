@@ -357,8 +357,21 @@ class _TelaMapaState extends State<TelaMapa> {
         context,
         camada: camada,
         agora: DateTime.now().toUtc(),
+        onIrAteAqui: () => unawaited(_irAteOTrecho(camada)),
       ),
     );
+  }
+
+  /// Abre a rota ate o trecho (issue #27); destino e o ponto que a camada ja
+  /// tem (centroide da linha ou centro do circulo do fallback).
+  Future<void> _irAteOTrecho(TrechoEstado camada) async {
+    final abriu = await widget.ambiente.rota.abrir(
+      camada.centro,
+      rotulo: camada.via ?? camada.rotulo,
+    );
+    if (!abriu) {
+      _avisar('Nenhum app de mapas disponível para abrir a rota.');
+    }
   }
 
   Marker _marcadorUsuario(LatLng ponto) => Marker(

@@ -41,6 +41,9 @@ dependencies:
   latlong2: ^0.10.1
   geolocator: ^14.0.3
 
+  # abre a rota ate o trecho no app de mapas (geo: no android, Maps na web).
+  url_launcher: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

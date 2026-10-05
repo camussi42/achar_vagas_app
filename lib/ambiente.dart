@@ -12,6 +12,7 @@ import 'package:achar_vagas_app/geo/trecho_resolver.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
+import 'package:achar_vagas_app/services/rota.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
 
 /// Uid usado no modo demonstracao (sem Auth anonimo).
@@ -50,6 +51,7 @@ class AmbienteApp {
     required this.relatos,
     required this.trechos,
     this.motivoSemFirebase,
+    this.rota = const RotaUrlLauncher(),
   });
 
   /// `false` quando o Firebase nao esta configurado (modo demonstracao).
@@ -64,6 +66,10 @@ class AmbienteApp {
   final LocalizacaoService localizacao;
   final RelatosRepository relatos;
   final TrechosRepository trechos;
+
+  /// Encaminhamento da rota ate o trecho (issue #27): o padrao abre o app de
+  /// mapas instalado; os testes trocam por um duble.
+  final RotaService rota;
 
   /// Cascata da issue #12: trecho canonico (Overture/GERS) e, quando nao ha
   /// malha importada para o ponto, a area aproximada por geohash.
