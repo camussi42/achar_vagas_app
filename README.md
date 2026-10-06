@@ -59,4 +59,4 @@ flutter test test_emulador                      # regras do firestore no emulado
 python -m unittest discover -s tools/pipeline   # pipeline de trechos e seeder
 ```
 
-**CI:** as três linhas de cima (`flutter analyze`, `flutter test` e os testes da pipeline) rodam sozinhas em todo PR e em todo push na `main` (`.github/workflows/ci.yml`); a `main` só aceita merge com os três checks verdes.
+**CI:** `flutter analyze`, `flutter test` e os testes da pipeline (`python -m unittest discover -s tools/pipeline`) rodam sozinhas em todo PR e em todo push na `main` (`.github/workflows/ci.yml`); a branch protection da `main` exige os três checks verdes para merge.
