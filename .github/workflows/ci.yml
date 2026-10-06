@@ -1,10 +1,10 @@
 # CI: analyze + testes (issue #40).
 #
 # Tres checagens independentes em todo PR e em todo push na main: analyze,
-# suite do flutter e testes da pipeline. A branch protection da main so aceita
-# merge com as tres verdes — e' o que impede PR quebrado de entrar (o #27 fechou
-# sem o codigo na main). As `firestore.rules` no emulador (java/node) ficam no
-# workflow separado `regras-firestore.yml` (issue #39).
+# suite do flutter e testes da pipeline. A branch protection da main exige as
+# tres verdes para merge; sem ela o PR quebrado entra (foi assim que o #27
+# fechou sem o codigo na main). As `firestore.rules` no emulador (java/node)
+# ficam no workflow separado `regras-firestore.yml` (issue #39).
 name: ci
 
 on:
