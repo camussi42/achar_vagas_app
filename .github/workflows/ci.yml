@@ -1,0 +1,71 @@
+# CI: analyze + testes (issue #40).
+#
+# Tres checagens independentes em todo PR e em todo push na main: analyze,
+# suite do flutter e testes da pipeline. A branch protection da main so aceita
+# merge com as tres verdes — e' o que impede PR quebrado de entrar (o #27 fechou
+# sem o codigo na main). As `firestore.rules` no emulador (java/node) ficam no
+# workflow separado `regras-firestore.yml` (issue #39).
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# o check que vale e o do ultimo commit: um push novo no mesmo PR cancela a
+# rodada anterior em vez de deixar dois checks disputando
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # pinada por commit: o SonarCloud (githubactions:S7637) exige o SHA cheio
+      # das actions de terceiros; a tag fica no comentario.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+
+      # `--enforce-lockfile`: usa o `pubspec.lock` versionado e falha se ele
+      # precisaria mudar (mesma leitura do workflow da issue #39)
+      - run: flutter pub get --enforce-lockfile
+      - run: flutter analyze
+
+  testes-flutter:
+    name: testes flutter
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get --enforce-lockfile
+      # suite completa de `test/` (unidades e widgets); `test_emulador/` fica
+      # de fora de proposito — aquela precisa do emulador e roda na issue #39
+      - run: flutter test
+
+  pipeline:
+    name: testes pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      # mesma linha do README; so stdlib, entao nao ha requirements para instalar
+      - run: python -m unittest discover -s tools/pipeline -v
