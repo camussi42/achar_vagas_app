@@ -14,6 +14,8 @@ Prof.° Reginaldo Ré
 
 **app publicado:** https://achar-vagas.web.app/
 
+[![ci](https://github.com/camussi42/achar_vagas_app/actions/workflows/ci.yml/badge.svg)](https://github.com/camussi42/achar_vagas_app/actions/workflows/ci.yml)
+
 ## Proposta inicial
 
 *"Gostaria de desenvolver um aplicativo de mobilidade urbana focado em estacionamento. O objetivo principal é ajudar motoristas a encontrarem e navegarem até vagas de carro disponíveis em tempo real, reduzindo o tempo de busca e o trânsito. Pensei em uma espécie de mapa, onde o usuário abre o app, vê sua localização atual e os pontos de estacionamento ao redor. Penso que teria que ter um Indicador de Disponibilidade: As áreas mudam de cor (ex: Verde = vagas, Vermelho = Lotado). E por último, penso que deveria apontar rotas: O usuário clica na vaga desejada e o app abre a rota usando o GPS (como Waze ou Google Maps)."*
@@ -56,3 +58,5 @@ flutter test                                    # app: unidades e widgets
 flutter test test_emulador                      # regras do firestore no emulador (docker-compose up -d firebase)
 python -m unittest discover -s tools/pipeline   # pipeline de trechos e seeder
 ```
+
+**CI:** as três linhas de cima (`flutter analyze`, `flutter test` e os testes da pipeline) rodam sozinhas em todo PR e em todo push na `main` (`.github/workflows/ci.yml`); a `main` só aceita merge com os três checks verdes.
