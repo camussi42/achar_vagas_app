@@ -47,6 +47,7 @@ void main() {
   /// [usandoFirebase] e [motivo] controlam o aviso do topo do mapa (issue #29)
   /// e os repositorios podem ser trocados por fakes que falham; [rota] e o
   /// duble do encaminhamento para o app de mapas (issue #27).
+  /// [ambiente] substitui o grafo de dependencias completo (issue #48).
   AmbienteApp ambienteCom({
     required LocalizacaoService localizacao,
     RelatosRepository? relatos,
@@ -54,7 +55,9 @@ void main() {
     bool usandoFirebase = false,
     MotivoSemFirebase motivo = MotivoSemFirebase.naoConfigurado,
     RotaService rota = const RotaUrlLauncher(),
+    AmbienteApp? ambiente,
   }) =>
+      ambiente ??
       AmbienteApp(
         usandoFirebase: usandoFirebase,
         uid: 'teste',
@@ -500,6 +503,45 @@ void main() {
       find.text('Nenhum app de mapas disponível para abrir a rota.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets(
+      'toque em uma zona sem relato mostra o detalhe com o botao de rota',
+      (tester) async {
+    // um trecho de zona (fallback geohash, sem relato): e tocável e o botao de
+    // rota aparece mesmo sem relato.
+    final zona = Trecho.aproximado(pontoFixo);
+    final ambiente = AmbienteApp(
+      usandoFirebase: false,
+      uid: 'teste',
+      localizacao: const _LocalizacaoNula(),
+      relatos: RelatosMemoria(),
+      trechos: TrechosMemoria(<Trecho>[zona]),
+      rota: _RotaFalsa(),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        trechos: ambiente.trechos,
+        ambiente: ambiente,
+      ),
+    );
+
+    // tocar no centro da celula do geohash (circulo neutro, sem relato).
+    final celula = geohashCaixa(zona.id.chave);
+    await tester.tapAt(naTela(tester, celula.centro));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(chaveDetalheTrecho), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.textContaining('Sem relato'),
+      ).evaluate().isNotEmpty,
+      isTrue,
+    );
+    expect(find.byKey(chaveBotaoIrAteTrecho), findsOneWidget);
   });
 }
 

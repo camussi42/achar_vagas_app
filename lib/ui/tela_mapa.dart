@@ -1,6 +1,6 @@
 /// Tela inicial: mapa do OpenStreetMap, GPS do usuario e relatos por trecho.
 ///
-/// Concentra as tres issues desta entrega:
+/// Concentra as quatro issues desta entrega:
 /// - #3  mapa OSM com zoom/pan, centralizado em Campo Mourao, permissao de
 ///       localizacao pedida na abertura e marcador da posicao atual;
 /// - #12 botao de localizacao e botoes de relato, resolvendo o trecho pela
@@ -12,6 +12,9 @@
 /// - #29 faixa discreta sobre o mapa quando o app esta sem backend (modo
 ///       demonstracao, com o motivo que o bootstrap registrou) e quando a
 ///       leitura dos relatos ou dos trechos falha em tempo de execucao.
+/// - #48 "Ir ate aqui" funciona ao tocar em qualquer zona/setor, mesmo sem
+///       relato: o detalhe abre e o botao de rota fica visivel para todo trecho
+///       tocado, nao apenas para os que ja tem relato valido.
 ///
 /// A tela nao fala com Firebase nem com `geolocator` diretamente: recebe um
 /// [AmbienteApp], o que permite rodar em modo demonstracao e testar com
@@ -318,7 +321,9 @@ class _TelaMapaState extends State<TelaMapa> {
       ..showSnackBar(SnackBar(content: Text(mensagem), action: acao));
   }
 
-  /// trechos canonicos com relato viram linha; hitValue e o id do trecho.
+  /// Trechos canonicos com geometria viram linha; o hitValue e o id do trecho.
+  /// Zones sem relato valido sao pintados em neutro mas permanecem toque-aveis
+  /// (issue #48).
   List<Polyline<String>> _polylines() => <Polyline<String>>[
         for (final camada in _camadas)
           if (camada.temLinha)
@@ -332,7 +337,8 @@ class _TelaMapaState extends State<TelaMapa> {
             ),
       ];
 
-  /// Fallback geohash (e trecho sem geometria) viram circulo (regras 2 e 3).
+  /// Trechos sem linha (fallback geohash ou canonico sem geometria) viram
+  /// circulo (regras 2 e 3); sao toque-aveis com ou sem relato.
   List<CircleMarker<String>> _circles() => <CircleMarker<String>>[
         for (final camada in _camadas)
           if (!camada.temLinha)
@@ -357,6 +363,7 @@ class _TelaMapaState extends State<TelaMapa> {
         context,
         camada: camada,
         agora: DateTime.now().toUtc(),
+        ambiente: widget.ambiente,
         onIrAteAqui: () => unawaited(_irAteOTrecho(camada)),
       ),
     );
