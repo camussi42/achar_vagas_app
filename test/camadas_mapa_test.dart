@@ -107,14 +107,19 @@ void main() {
       expect(camada.raioM, greaterThan(0));
     });
 
-    test('trecho sem relato nao entra nas camadas', () {
+    test('trecho sem relato vira camada neutra (nao pintada mas tocável)',
+        () {
       final camadas = combinar(
         trechos: <Trecho>[trechoCanonico()],
         estados: const <String, ResumoEstado>{},
         pontos: const <String, LatLng>{},
       );
 
-      expect(camadas, isEmpty);
+      // o trecho ainda e uma camada de toque (issue #48), mas sem relato nao
+      // e pintado. a verificacao da pintura fica em tela_mapa_test.dart.
+      expect(camadas, hasLength(1));
+      expect(camadas.single.resumo.estado, EstadoTrecho.desconhecido);
+      expect(camadas.single.resumo.temRelato, isFalse);
     });
 
     test('id fora do padrao e ignorado sem lancar', () {

@@ -59,16 +59,26 @@ class TrechoEstado {
     return 'Área aproximada (~${raioM.round()} m)';
   }
 
+  /// `true` quando o detalhe de toque deve mostrar o botao de rota.
+  ///
+  /// Sempre [true] para camadas de toque: o botao abre a rota ate o ponto do
+  /// trecho ate que o relato chegue, ate que o usuario decida ir (issue #48).
+  bool get mostrarBotaoIrAteAqui => true;
+
   @override
   String toString() =>
       'TrechoEstado(${id.valor}, ${estado.rotulo}, linha: ${linha.length})';
 }
+
 
 /// Monta as camadas do mapa a partir dos trechos conhecidos, dos estados
 /// agregados por trecho e do ponto do relato mais recente de cada trecho.
 ///
 /// A ordem da saida e estavel (por id) para o desenho nao "tremer" entre
 /// rebuilds.
+///
+/// Cada trecho resolvido da consulta vira uma camada. As que nao tem relato
+/// valido sao neutras: nao sao pintadas, mas sao tocaveis (issue #48).
 List<TrechoEstado> combinar({
   required Iterable<Trecho> trechos,
   required Map<String, ResumoEstado> estados,
@@ -78,19 +88,23 @@ List<TrechoEstado> combinar({
     for (final trecho in trechos) trecho.id.valor: trecho,
   };
 
+  // Uniao de trechos conhecidos e trechos com relato: ambos sao zonas toque-aveis.
+  final chaves = <String>{...trechos.map((t) => t.id.valor), ...estados.keys}
+      .toList()
+    ..sort();
+
   final camadas = <TrechoEstado>[];
-  final chaves = estados.keys.toList()..sort();
   for (final chave in chaves) {
     final resumo = estados[chave];
     final id = TrechoId.tentarParse(chave);
-    if (resumo == null || id == null) continue;
+    if (id == null) continue;
 
     final canonico = porId[chave];
     if (canonico != null && canonico.temGeometria) {
       camadas.add(
         TrechoEstado(
           id: id,
-          resumo: resumo,
+          resumo: resumo ?? const ResumoEstado.desconhecido(),
           via: canonico.via,
           linha: canonico.geometria,
           centro: canonico.centroide,
@@ -100,13 +114,14 @@ List<TrechoEstado> combinar({
     }
 
     if (id.canonico) {
-      // Trecho canonico sem geometria carregada: marca o ponto relatado.
+      // Trecho canonico sem geometria: e tocável, mas nao e pintado sem
+      // relato valido (o ponto relatado e a fonte do circulo).
       final ponto = pontos[chave];
       if (ponto == null) continue;
       camadas.add(
         TrechoEstado(
           id: id,
-          resumo: resumo,
+          resumo: resumo ?? const ResumoEstado.desconhecido(),
           via: canonico?.via,
           centro: ponto,
           raioM: raioSemGeometriaM,
@@ -115,13 +130,13 @@ List<TrechoEstado> combinar({
       continue;
     }
 
-    // Fallback geohash: mesmo centro para todos os relatos da mesma celula.
+    // Fallback geohash: sempre uma zona de toque, mesmo sem relato.
     final caixa = _caixaSegura(id.chave);
     if (caixa == null) continue;
     camadas.add(
       TrechoEstado(
         id: id,
-        resumo: resumo,
+        resumo: resumo ?? const ResumoEstado.desconhecido(),
         centro: caixa.centro,
         raioM: _raioDaCelulaM(caixa),
       ),

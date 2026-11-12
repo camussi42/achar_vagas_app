@@ -27,7 +27,11 @@ app em Flutter web + Firebase: um mapa do centro de Campo Mourão onde o motoris
 - a localização é pedida já na abertura: o mapa centraliza no usuário (OpenStreetMap) e o botão de localização recentraliza quando quiser
 - cada trecho de rua fica com a cor do estado: **verde** = tem vaga, **vermelho** = lotado, **laranja** = liberando vaga; trecho sem relato recente não é pintado
 - a cor vem dos próprios usuários: os botões "tem vaga", "lotado" e "saindo" gravam um relato que vale **20 min** — o relato mais recente manda
-- tocar num trecho pintado abre o detalhe: nome da via, estado atual, quantos relatos válidos ele tem e há quanto tempo foi o último; o botão **ir até aqui** abre a rota até o ponto no app de mapas (no web, o Google Maps em outra aba)
+- tocar num trecho (pintado ou não) abre o detalhe: nome da via, estado atual,
+  quantos relatos válidos ele tem e há quanto tempo foi o último; o botão
+  **ir até aqui** abre a rota até o ponto no app de mapas (no web, o Google
+  Maps em outra aba). O botao aparece em qualquer zona/setor, até sem relato
+  (issue #48).
 - sem Firebase configurado o app sobe em **modo demonstração**: os 40 trechos reais do centro com relatos em memória, e uma faixa no topo avisa que está sem backend
 
 ## como testar
