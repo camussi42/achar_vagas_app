@@ -2,8 +2,8 @@
 ///
 /// Consulta por proximidade sem PostGIS: os documentos carregam o geohash de
 /// precisao 6 e a query usa `whereIn` com as celulas que cobrem o raio
-/// (`geohashCobertura`). O filtro exato de distancia e a ordenacao por horario
-/// acontecem no cliente — ver `docs/adr/0001-identidade-de-trecho.md`.
+/// (`geohashCobertura`), cortando pela janela de validade e ordenando por
+/// `criadoEm` desc, para o limite nao ser tomado por historico.
 library;
 
 import 'dart:async';
@@ -18,6 +18,16 @@ import 'package:latlong2/latlong.dart';
 /// Valores usados por padrao nas consultas de proximidade.
 const double raioConsultaPadraoM = 1200;
 const int limiteConsultaPadrao = 300;
+
+/// folga contra o desvio entre o relogio do aparelho e o do servidor.
+const Duration margemJanelaRelatos = Duration(minutes: 1);
+
+/// inicio da janela de relatos que ainda podem valer em [agora].
+DateTime inicioJanelaRelatos(
+  DateTime agora, {
+  Duration validade = validadeRelatoPadrao,
+}) =>
+    agora.subtract(validade + margemJanelaRelatos);
 
 abstract class RelatosRepository {
   /// Grava um novo relato e devolve o registro com `id`.
@@ -60,6 +70,8 @@ class RelatosFirestore implements RelatosRepository {
       'precisaoM': relato.precisaoM,
       // Resolvido no servidor: as regras exigem criadoEm == request.time.
       'criadoEm': FieldValue.serverTimestamp(),
+      // alvo do TTL; as regras aceitam +/- 1 min do horario do servidor.
+      'expiraEm': Timestamp.fromDate(relato.expiraEm),
     });
     return Relato(
       id: referencia.id,
@@ -113,9 +125,14 @@ class RelatosFirestore implements RelatosRepository {
       raioM,
       precisao: precisaoGeohashConsulta,
     );
+    // janela + orderBy desc: o limite nao e tomado por historico.
+    // pede o indice composto declarado em `firestore.indexes.json`.
+    final inicio = inicioJanelaRelatos(DateTime.now().toUtc());
     return _firestore
         .collection(colecao)
         .where('geo.geohashConsulta', whereIn: celulas)
+        .where('criadoEm', isGreaterThanOrEqualTo: Timestamp.fromDate(inicio))
+        .orderBy('criadoEm', descending: true)
         .limit(limite);
   }
 }

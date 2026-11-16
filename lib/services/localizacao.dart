@@ -7,41 +7,36 @@ library;
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
-/// Por que a localizacao nao esta disponivel (issue #30).
-///
-/// A tela precisa da diferenca entre os casos: permissao negada e permissao
-/// negada para sempre pedem o mesmo caminho (configuracoes do app), enquanto o
-/// servico desligado pede as configuracoes de localizacao do sistema.
+/// motivo de a localizacao nao estar disponivel; a tela usa cada caso para
+/// oferecer o caminho de correcao certo (configuracoes do app ou do sistema).
 enum MotivoLocalizacao {
-  /// Permissao recusada agora, mas ainda pode ser pedida de novo.
+  /// permissao recusada agora; ainda pode ser pedida de novo.
   permissaoNegada,
 
-  /// Permissao recusada em definitivo: so o usuario resolve nas configuracoes.
+  /// permissao recusada em definitivo; so resolve nas configuracoes.
   permissaoNegadaParaSempre,
 
-  /// GPS do aparelho desligado.
+  /// gps do aparelho desligado.
   servicoDesligado,
 
-  /// Timeout, plataforma sem suporte (ex.: web sem HTTPS) ou falha inesperada.
+  /// timeout, plataforma sem suporte ou falha inesperada.
   falha,
 }
 
-/// Resultado de [LocalizacaoService.posicaoAtual]: `ok` ou o motivo da falha.
-///
-/// Substitui o `null` unico das issues #3/#12 (issue #30): a tela deixa de
-/// adivinhar o que aconteceu e passa a explicar o caso certo.
+/// resultado de [LocalizacaoService.posicaoAtual]: `ok` ou o motivo da falha;
+/// nunca lanca, a tela deixa de adivinhar o que aconteceu.
 sealed class ResultadoLocalizacao {
   const ResultadoLocalizacao();
 }
 
-/// Posicao obtida com sucesso.
+/// posicao obtida com sucesso.
 final class LocalizacaoOk extends ResultadoLocalizacao {
   const LocalizacaoOk(this.ponto);
 
   final LatLng ponto;
 }
 
-/// Sem posicao: a UI usa [motivo] para explicar e oferecer a correcao.
+/// sem posicao: a ui usa [motivo] para explicar e oferecer a correcao.
 final class LocalizacaoIndisponivel extends ResultadoLocalizacao {
   const LocalizacaoIndisponivel(this.motivo);
 
@@ -49,27 +44,21 @@ final class LocalizacaoIndisponivel extends ResultadoLocalizacao {
 }
 
 abstract class LocalizacaoService {
-  /// Posicao atual ou o motivo pelo qual ela nao esta disponivel.
-  ///
-  /// Nunca lanca: qualquer falha vira [LocalizacaoIndisponivel].
+  /// posicao atual ou o motivo de ela nao estar disponivel; nunca lanca.
   Future<ResultadoLocalizacao> posicaoAtual();
 
-  /// Atualizacoes de posicao (vazio quando nao ha permissao).
+  /// atualizacoes de posicao (vazio quando nao ha permissao).
   Stream<LatLng> acompanhar();
 
-  /// Abre as configuracoes do app: caminho para liberar a permissao negada.
+  /// abre as configuracoes do app (permissao negada).
   Future<void> abrirConfiguracoes();
 
-  /// Abre as configuracoes de localizacao do sistema: caminho para ligar o GPS.
+  /// abre as configuracoes de localizacao do sistema (gps desligado).
   Future<void> abrirConfiguracoesDeLocalizacao();
 }
 
-/// Implementacao real, com `geolocator`.
-///
-/// Nunca lanca excecao para a UI: qualquer falha (servico desligado, permissao
-/// negada, timeout, plataforma sem suporte — ex.: web sem HTTPS) vira
-/// [LocalizacaoIndisponivel] ou stream vazio, e a tela cai para a posicao
-/// inicial configuravel.
+/// implementacao real, com `geolocator`; nunca lanca, qualquer falha vira
+/// [LocalizacaoIndisponivel] (ou stream vazio) e a tela cai na posicao inicial.
 class LocalizacaoGeolocator implements LocalizacaoService {
   const LocalizacaoGeolocator({
     this.precisao = LocationAccuracy.high,
@@ -89,9 +78,7 @@ class LocalizacaoGeolocator implements LocalizacaoService {
       if (permissao == LocationPermission.denied) {
         permissao = await Geolocator.requestPermission();
       }
-      // `deniedForever` so sai do `requestPermission` quando o usuario marcou
-      // "nao perguntar de novo": o app nao pode insistir, so mandar para as
-      // configuracoes (issue #30).
+      // deniedForever so sai do requestPermission apos "nao perguntar de novo".
       if (permissao == LocationPermission.deniedForever) {
         return const LocalizacaoIndisponivel(
           MotivoLocalizacao.permissaoNegadaParaSempre,
@@ -118,7 +105,7 @@ class LocalizacaoGeolocator implements LocalizacaoService {
     try {
       await Geolocator.openAppSettings();
     } catch (_) {
-      // Plataforma sem suporte (ex.: web): o usuario ja foi avisado na tela.
+      // web: o usuario ja foi avisado na tela.
     }
   }
 
@@ -127,7 +114,7 @@ class LocalizacaoGeolocator implements LocalizacaoService {
     try {
       await Geolocator.openLocationSettings();
     } catch (_) {
-      // Idem: falhar aqui nao muda o que a tela mostrou.
+      // falhar aqui nao muda o que a tela mostrou.
     }
   }
 
@@ -148,7 +135,7 @@ class LocalizacaoGeolocator implements LocalizacaoService {
   }
 }
 
-/// Posicao fixa e permissao concedida: modo dev (sem GPS) e testes.
+/// posicao fixa e permissao concedida: modo dev (sem gps) e testes.
 class LocalizacaoFixa implements LocalizacaoService {
   const LocalizacaoFixa(this.ponto);
 

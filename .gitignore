@@ -46,3 +46,20 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Dados do emulador do firebase: persistem entre execucoes (emulator-data/), mas
+# nao entram no git. O .gitkeep e versionado so para a pasta existir no start.
+/emulator-data/*
+!/emulator-data/.gitkeep
+
+# Chave de service account usada pelo seeder no projeto real (issue #37): nunca
+# vai para o git.
+*-firebase-adminsdk*.json
+service-account*.json
+
+# Artefatos locais: cache do firebase-tools (.firebase/) e dados gerados pela
+# pipeline de trechos (export_trechos.py -> trechos.ndjson / segmentos baixados).
+/.firebase/
+/trechos.ndjson
+/segmentos_overture.geojson
+/segmentos_overture.geojson.state

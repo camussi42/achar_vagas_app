@@ -6,9 +6,11 @@ import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
+import 'package:achar_vagas_app/services/rota.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
 import 'package:achar_vagas_app/ui/faixa_aviso.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
+import 'package:achar_vagas_app/ui/detalhe_trecho.dart';
 import 'package:achar_vagas_app/ui/tela_mapa.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -17,12 +19,12 @@ import 'package:latlong2/latlong.dart';
 
 import 'apoio/tiles_falsos.dart';
 
-/// Tela do mapa (issues #3, #12, #13 e #30) com repositorios em memoria, tiles
-/// falsos e posicao controlada: nada de rede, GPS real ou Firebase.
+/// tela do mapa (issues #3, #12, #13, #29 e #30) com repositorios em memoria,
+/// tiles falsos e posicao controlada: nada de rede, GPS real ou Firebase.
 ///
-/// A #30 cobre os quatro motivos de localizacao indisponivel e a acao de abrir
-/// as configuracoes (do app ou do sistema), por isso os fakes registram as
-/// chamadas de `abrirConfiguracoes*`.
+/// os fakes registram as chamadas de `abrirConfiguracoes*` (aviso de
+/// localizacao indisponivel) e falham de proposito para exercitar as faixas de
+/// aviso do modo demonstracao (issue #29).
 void main() {
   const uuid = 'c1d70afe-a7de-4b73-a41c-e92526ab72f9';
   const pontoFixo = LatLng(-24.0455000, -52.3790000);
@@ -43,13 +45,15 @@ void main() {
       );
 
   /// [usandoFirebase] e [motivo] controlam o aviso do topo do mapa (issue #29)
-  /// e os repositorios podem ser trocados por fakes que falham.
+  /// e os repositorios podem ser trocados por fakes que falham; [rota] e o
+  /// duble do encaminhamento para o app de mapas (issue #27).
   AmbienteApp ambienteCom({
     required LocalizacaoService localizacao,
     RelatosRepository? relatos,
     TrechosRepository? trechos,
     bool usandoFirebase = false,
     MotivoSemFirebase motivo = MotivoSemFirebase.naoConfigurado,
+    RotaService rota = const RotaUrlLauncher(),
   }) =>
       AmbienteApp(
         usandoFirebase: usandoFirebase,
@@ -58,6 +62,7 @@ void main() {
         localizacao: localizacao,
         relatos: relatos ?? RelatosMemoria(),
         trechos: trechos ?? TrechosMemoria(),
+        rota: rota,
       );
 
   Future<void> abrir(WidgetTester tester, AmbienteApp ambiente) async {
@@ -70,6 +75,20 @@ void main() {
 
   MapCamera cameraDoMapa(WidgetTester tester) =>
       MapCamera.of(tester.element(find.byType(TileLayer)));
+
+  /// relato valido (3 min atras) no ponto fixo.
+  Relato relatoDeTeste(TrechoId trecho, TipoRelato tipo) => Relato.novo(
+        uid: 'teste',
+        trechoId: trecho,
+        tipo: tipo,
+        ponto: pontoFixo,
+        criadoEm: DateTime.now().toUtc().subtract(const Duration(minutes: 3)),
+      );
+
+  /// posicao na tela de um ponto do mapa (para `tester.tapAt`).
+  Offset naTela(WidgetTester tester, LatLng ponto) =>
+      tester.getTopLeft(find.byType(FlutterMap)) +
+      cameraDoMapa(tester).latLngToScreenOffset(ponto);
 
   testWidgets('mostra o mapa, os botoes de relato e a legenda', (tester) async {
     await abrir(
@@ -126,7 +145,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 150));
 
-    // Texto do caso (nao mais a mensagem unica da #3) e o caminho de correcao.
+    // texto do motivo e caminho de correcao (a mensagem unica era da #3).
     expect(find.textContaining('permissão de localização está bloqueada'),
         findsOneWidget);
     expect(find.text('Abrir configurações'), findsOneWidget);
@@ -202,8 +221,7 @@ void main() {
       ),
     );
 
-    // A permissao foi pedida (e negada) na abertura, mas sem aviso: o mapa ja
-    // esta em Campo Mourao e o caminho de correcao fica no botao (issue #30).
+    // permissao negada na abertura: sem aviso, o caminho fica no botao.
     expect(find.byType(SnackBar), findsNothing);
     expect(find.textContaining('permissão'), findsNothing);
   });
@@ -358,10 +376,173 @@ void main() {
     expect(find.byKey(chaveFaixaSemDados), findsOneWidget);
     expect(find.byKey(chaveFaixaDemonstracao), findsNothing);
   });
+
+  testWidgets('tocar na linha do trecho abre o detalhe com via, estado e idade',
+      (tester) async {
+    final relatos = RelatosMemoria();
+    await relatos.criar(
+      relatoDeTeste(TrechoId.overture(uuid), TipoRelato.vaga),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+        trechos: TrechosMemoria(<Trecho>[trechoDeTeste(pontoFixo)]),
+      ),
+    );
+
+    // o toque cai no meio da geometria.
+    await tester.tapAt(naTela(tester, pontoFixo));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(chaveDetalheTrecho), findsOneWidget);
+    expect(find.text('Rua São Paulo'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.text('Com vaga'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('1 relato válido nos últimos 20 min'), findsOneWidget);
+    expect(find.text('Relato mais recente: há 3 min'), findsOneWidget);
+  });
+
+  testWidgets('tocar no circulo do fallback abre o detalhe da area aproximada',
+      (tester) async {
+    final relatos = RelatosMemoria();
+    final idAproximado = Trecho.aproximado(pontoFixo).id;
+    await relatos.criar(relatoDeTeste(idAproximado, TipoRelato.lotado));
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+      ),
+    );
+
+    // sem trecho canonico o relato vira circulo na celula do geohash.
+    final celula = geohashCaixa(idAproximado.chave);
+    await tester.tapAt(naTela(tester, celula.centro));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(chaveDetalheTrecho), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.textContaining('Área aproximada'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(chaveDetalheTrecho),
+        matching: find.text('Lotado'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('o detalhe abre a rota no app de mapas ate o ponto do trecho',
+      (tester) async {
+    final relatos = RelatosMemoria();
+    final rota = _RotaFalsa();
+    await relatos.criar(
+      relatoDeTeste(TrechoId.overture(uuid), TipoRelato.vaga),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+        trechos: TrechosMemoria(<Trecho>[trechoDeTeste(pontoFixo)]),
+        rota: rota,
+      ),
+    );
+
+    await tester.tapAt(naTela(tester, pontoFixo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(chaveBotaoIrAteTrecho));
+    await tester.pumpAndSettle();
+
+    expect(rota.chamadas, 1);
+    // destino e o centroide; rotulo e o nome da via.
+    expect(rota.destino, pontoFixo);
+    expect(rota.rotulo, 'Rua São Paulo');
+    // a folha fecha antes de sair para o app de mapas.
+    expect(find.byKey(chaveDetalheTrecho), findsNothing);
+  });
+
+  testWidgets('sem app de mapas a tela avisa em vez de lancar', (tester) async {
+    final relatos = RelatosMemoria();
+    final rota = _RotaFalsa(abre: false);
+    await relatos.criar(
+      relatoDeTeste(TrechoId.overture(uuid), TipoRelato.vaga),
+    );
+    await abrir(
+      tester,
+      ambienteCom(
+        localizacao: const _LocalizacaoNula(),
+        relatos: relatos,
+        trechos: TrechosMemoria(<Trecho>[trechoDeTeste(pontoFixo)]),
+        rota: rota,
+      ),
+    );
+
+    await tester.tapAt(naTela(tester, pontoFixo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(chaveBotaoIrAteTrecho));
+    await tester.pumpAndSettle();
+
+    expect(rota.chamadas, 1);
+    expect(
+      find.text('Nenhum app de mapas disponível para abrir a rota.'),
+      findsOneWidget,
+    );
+  });
 }
 
-/// Sem acesso a localizacao: devolve sempre o [motivo] informado e registra se
-/// as configuracoes foram abertas (issue #30).
+/// rota falsa: guarda o que a tela pediu e responde o que o teste mandar.
+class _RotaFalsa implements RotaService {
+  _RotaFalsa({this.abre = true});
+
+  /// `false` simula nenhum app de mapas instalado.
+  final bool abre;
+
+  int chamadas = 0;
+  LatLng? destino;
+  String? rotulo;
+
+  @override
+  Future<bool> abrir(LatLng destino, {String? rotulo}) async {
+    chamadas++;
+    this.destino = destino;
+    this.rotulo = rotulo;
+    return abre;
+  }
+}
+
+/// sem permissao/servico de GPS: nunca ha posicao. Fake dos testes de detalhe
+/// (#26), que nao precisam de localizacao para tocar no trecho.
+class _LocalizacaoNula implements LocalizacaoService {
+  const _LocalizacaoNula();
+
+  @override
+  Future<ResultadoLocalizacao> posicaoAtual() async =>
+      const LocalizacaoIndisponivel(MotivoLocalizacao.falha);
+
+  @override
+  Stream<LatLng> acompanhar() => const Stream<LatLng>.empty();
+
+  @override
+  Future<void> abrirConfiguracoes() async {}
+
+  @override
+  Future<void> abrirConfiguracoesDeLocalizacao() async {}
+}
+
+/// localizacao sem acesso: devolve sempre o [motivo] e registra as configs.
 class _LocalizacaoSemAcesso implements LocalizacaoService {
   _LocalizacaoSemAcesso(this.motivo);
 

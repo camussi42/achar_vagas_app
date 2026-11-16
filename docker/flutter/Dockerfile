@@ -3,8 +3,9 @@
 # A SDK vem do zip oficial, fixada por versao + sha256, porque as imagens
 # prontas nao acompanham mais o projeto: `cirrusci/flutter` parou de ser
 # atualizada em 2023 (Dart antigo) e `ghcr.io/cirruslabs/flutter` parou de
-# receber imagens em 01/05/2026. O `pubspec.lock` exige `flutter >= 3.38.4`,
-# entao a versao usada aqui fica explicita (e o hash e conferido no build).
+# receber imagens em 01/05/2026. O `pubspec.lock` exige `flutter >= 3.44.0`
+# (era 3.38.4 antes do `url_launcher` da issue #27), entao a versao usada aqui
+# fica explicita (e o hash e conferido no build).
 FROM debian:bookworm-slim
 
 ARG FLUTTER_VERSION=3.47.5
@@ -34,4 +35,6 @@ RUN ln -sf /opt/flutter/bin/flutter /usr/local/bin/flutter \
 
 WORKDIR /app
 EXPOSE 5000
-ENTRYPOINT ["bash", "-lc", "flutter pub get && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5000"]
+# `USAR_EMULADOR=true` liga os emuladores do compose (auth 9099 e firestore 8080);
+# o host e o `localhost` do navegador e nao o `firebase` da rede interna.
+ENTRYPOINT ["bash", "-lc", "flutter pub get && flutter run -d web-server --web-hostname 0.0.0.0 --web-port 5000 --dart-define=USAR_EMULADOR=true --dart-define=HOST_EMULADOR=localhost"]

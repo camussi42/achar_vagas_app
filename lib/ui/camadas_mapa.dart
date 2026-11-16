@@ -150,6 +150,21 @@ Map<String, LatLng> pontosMaisRecentes(
   return pontos;
 }
 
+/// primeiro id tocado que o mapa conhece; ids desconhecidos sao ignorados.
+TrechoEstado? trechoTocado(
+  Iterable<TrechoEstado> camadas,
+  Iterable<String> valoresTocados,
+) {
+  final porValor = <String, TrechoEstado>{
+    for (final camada in camadas) camada.id.valor: camada,
+  };
+  for (final valor in valoresTocados) {
+    final camada = porValor[valor];
+    if (camada != null) return camada;
+  }
+  return null;
+}
+
 /// Meio da menor dimensao da celula (o circulo fica dentro dela).
 double _raioDaCelulaM(GeoHashCaixa caixa) {
   final menor = caixa.alturaM < caixa.larguraM ? caixa.alturaM : caixa.larguraM;

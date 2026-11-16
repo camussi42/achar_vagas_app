@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "179911606041",
+    "project_id": "achar-vagas",
+    "storage_bucket": "achar-vagas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:179911606041:android:e844fb7865c52d689a4f88",
+        "android_client_info": {
+          "package_name": "br.edu.utfpr.achar_vagas_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCtVMeBV-fw653uwMfCcBaI0UVqzQq31vc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

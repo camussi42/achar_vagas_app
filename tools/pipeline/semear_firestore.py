@@ -13,6 +13,12 @@ Com o emulador do docker-compose na sua maquina:
 Dentro do container do firebase o host muda para o nome do servico
 (`firebase:8080`), que e o valor usado no `docker-compose.yml`.
 
+Para semear o firestore **real** (issue #37), passe uma chave de service
+account (console do Firebase -> Contas de servico -> Gerar chave nova) no lugar
+do emulador:
+
+    python tools/pipeline/semear_firestore.py --arquivo trechos.ndjson --limpar --projeto <id-do-projeto> --credenciais chave-service-account.json
+
 A escrita usa o Admin SDK (ignora `firestore.rules`) — e justamente por isso que
 as regras negam escrita de cliente em `trechos`. O corpo gravado tem a MESMA
 forma que `lib/services/trechos_repository.dart` le: `centroide` e `geometria`
@@ -159,9 +165,8 @@ def limpar(cliente: Any, tamanho_lote: int = TAMANHO_LOTE) -> int:
         apagados += len(pagina)
 
 
-def cliente_emulador(host: str, projeto: str) -> Any:
-    """Cliente do Admin SDK apontado para o emulador."""
-    os.environ["FIRESTORE_EMULATOR_HOST"] = validar_emulador(host)
+def importar_admin_sdk() -> Any:
+    """`google.cloud.firestore`, com uma mensagem util quando falta a lib."""
     try:
         from google.cloud import firestore
     except ImportError as erro:  # pragma: no cover - depende do ambiente
@@ -170,8 +175,27 @@ def cliente_emulador(host: str, projeto: str) -> Any:
             "`pip install google-cloud-firestore` (ou use o container do "
             "docker-compose)"
         ) from erro
+    return firestore
 
+
+def cliente_emulador(host: str, projeto: str) -> Any:
+    """Cliente do Admin SDK apontado para o emulador."""
+    os.environ["FIRESTORE_EMULATOR_HOST"] = validar_emulador(host)
+    firestore = importar_admin_sdk()
     return firestore.Client(project=projeto)
+
+
+def cliente_producao(credenciais: Path, projeto: str) -> Any:
+    """Cliente do Admin SDK apontado para o firestore real, com chave de service account."""
+    caminho = credenciais.resolve()
+    if not caminho.is_file():
+        raise SystemExit(f"nao achei a chave de credenciais: {caminho}")
+
+    # com a variavel do emulador no ambiente o cliente escreveria no emulador
+    # achando que estava no projeto real.
+    os.environ.pop("FIRESTORE_EMULATOR_HOST", None)
+    firestore = importar_admin_sdk()
+    return firestore.Client.from_service_account_json(str(caminho), project=projeto)
 
 
 def criar_parser() -> argparse.ArgumentParser:
@@ -188,6 +212,12 @@ def criar_parser() -> argparse.ArgumentParser:
         "--emulador",
         default=os.environ.get("FIRESTORE_EMULATOR_HOST") or EMULADOR_PADRAO,
         help="host:porta do emulador (padrao: FIRESTORE_EMULATOR_HOST)",
+    )
+    parser.add_argument(
+        "--credenciais",
+        type=Path,
+        default=None,
+        help="json de service account: grava no projeto real em vez do emulador",
     )
     parser.add_argument(
         "--limpar",
@@ -209,9 +239,13 @@ def main() -> int:
         )
         return 1
 
-    emulador = validar_emulador(argumentos.emulador)
-    cliente = cliente_emulador(emulador, argumentos.projeto)
-    print(f"emulador: {emulador} (projeto {argumentos.projeto})")
+    if argumentos.credenciais:
+        cliente = cliente_producao(argumentos.credenciais, argumentos.projeto)
+        print(f"firestore real (projeto {argumentos.projeto})")
+    else:
+        emulador = validar_emulador(argumentos.emulador)
+        cliente = cliente_emulador(emulador, argumentos.projeto)
+        print(f"emulador: {emulador} (projeto {argumentos.projeto})")
 
     if argumentos.limpar:
         print(f"limpando {COLECAO}: {limpar(cliente)} documentos removidos")
