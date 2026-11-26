@@ -1,6 +1,7 @@
 /// detalhe do trecho tocado, com o que a tela ja calculou (sem consulta nova).
 library;
 
+import 'package:achar_vagas_app/ambiente.dart';
 import 'package:achar_vagas_app/models/estado_trecho.dart';
 import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/ui/camadas_mapa.dart';
@@ -12,6 +13,10 @@ const Key chaveDetalheTrecho = Key('detalhe-trecho');
 
 /// chave do botao de rota ate o trecho.
 const Key chaveBotaoIrAteTrecho = Key('detalhe-ir-ate-aqui');
+
+/// "1 relato válido" / "3 relatos válidos".
+String _contagem(int total) =>
+    total == 1 ? '1 relato válido' : '$total relatos válidos';
 
 /// idade do relato mais recente em texto curto; horario futuro vira "agora".
 String idadeLegivel(DateTime? criadoEm, {required DateTime agora}) {
@@ -26,32 +31,22 @@ String idadeLegivel(DateTime? criadoEm, {required DateTime agora}) {
   return 'há ${decorrido.inHours} h ${minutos.toString().padLeft(2, '0')}';
 }
 
-/// "1 relato válido" / "3 relatos válidos".
-String _contagem(int total) =>
-    total == 1 ? '1 relato válido' : '$total relatos válidos';
-
 /// abre o detalhe de [camada]; com rota, pedir a rota fecha a folha antes.
 Future<void> mostrarDetalheTrecho(
   BuildContext context, {
   required TrechoEstado camada,
   required DateTime agora,
+  required AmbienteApp ambiente,
   VoidCallback? onIrAteAqui,
 }) {
-  final irAteAqui = onIrAteAqui;
   return showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     builder: (BuildContext context) => DetalheTrecho(
       camada: camada,
       agora: agora,
-      // a folha fecha antes de sair para o app de mapas: o aviso de falha
-      // (sem app de mapas) aparece sobre o mapa, nao atras da folha.
-      onIrAteAqui: irAteAqui == null
-          ? null
-          : () {
-              Navigator.of(context).pop();
-              irAteAqui();
-            },
+      ambiente: ambiente,
+      onIrAteAqui: onIrAteAqui,
     ),
   );
 }
@@ -61,6 +56,7 @@ class DetalheTrecho extends StatelessWidget {
     super.key,
     required this.camada,
     required this.agora,
+    required this.ambiente,
     this.onIrAteAqui,
   });
 
@@ -68,6 +64,9 @@ class DetalheTrecho extends StatelessWidget {
 
   /// relogio usado para a idade do relato.
   final DateTime agora;
+
+  /// grafo de dependencias do app: encaminhamento da rota ate o trecho.
+  final AmbienteApp ambiente;
 
   /// abre a rota ate o trecho; sem callback o botao nao existe.
   final VoidCallback? onIrAteAqui;
@@ -105,7 +104,7 @@ class DetalheTrecho extends StatelessWidget {
               resumo.temRelato
                   ? '${_contagem(resumo.total)} nos últimos '
                       '${validadeRelatoPadrao.inMinutes} min'
-                  : 'Nenhum relato válido agora',
+                  : 'Sem relato',
               style: tema.textTheme.bodyMedium,
             ),
             if (resumo.temRelato) ...<Widget>[
@@ -122,18 +121,47 @@ class DetalheTrecho extends StatelessWidget {
                 style: tema.textTheme.bodySmall,
               ),
             ],
-            if (onIrAteAqui != null) ...<Widget>[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                key: chaveBotaoIrAteTrecho,
-                onPressed: onIrAteAqui,
-                icon: const Icon(Icons.directions),
-                label: const Text('Ir até aqui'),
-              ),
+            if (camada.mostrarBotaoIrAteAqui) ...<Widget>[
+              if (onIrAteAqui != null) ...<Widget>[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  key: chaveBotaoIrAteTrecho,
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    onIrAteAqui!();
+                  },
+                  icon: const Icon(Icons.directions),
+                  label: const Text('Ir até aqui'),
+                ),
+              ] else ...<Widget>[
+                const SizedBox(height: 16),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    _abrirRota(context);
+                  },
+                  icon: const Icon(Icons.directions),
+                  label: const Text('Ir até aqui'),
+                ),
+              ],
             ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _abrirRota(BuildContext context) async {
+    final abriu = await ambiente.rota.abrir(
+      camada.centro,
+      rotulo: camada.via ?? camada.rotulo,
+    );
+    if (!abriu) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nenhum app de mapas disponível para abrir a rota.'),
+        ),
+      );
+    }
   }
 }
