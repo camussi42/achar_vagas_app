@@ -11,6 +11,7 @@ import 'package:achar_vagas_app/geo/resolver_overture.dart';
 import 'package:achar_vagas_app/geo/trecho_resolver.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
+import 'package:achar_vagas_app/services/presencas_repository.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
 import 'package:achar_vagas_app/services/rota.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
@@ -50,6 +51,7 @@ class AmbienteApp {
     required this.localizacao,
     required this.relatos,
     required this.trechos,
+    required this.presencas,
     this.motivoSemFirebase,
     this.rota = const RotaUrlLauncher(),
   });
@@ -66,6 +68,7 @@ class AmbienteApp {
   final LocalizacaoService localizacao;
   final RelatosRepository relatos;
   final TrechosRepository trechos;
+  final PresencasRepository presencas;
 
   /// Encaminhamento da rota ate o trecho (issue #27): o padrao abre o app de
   /// mapas instalado; os testes trocam por um duble.
@@ -93,6 +96,7 @@ class AmbienteApp {
         localizacao: const LocalizacaoGeolocator(),
         relatos: RelatosMemoria(),
         trechos: TrechosMemoria(trechosDemoGerado.map(Trecho.fromMap)),
+        presencas: PresencasMemoria(),
       );
 
   /// Modo Firebase: relatos e trechos ao vivo no Firestore.
@@ -102,5 +106,6 @@ class AmbienteApp {
         localizacao: const LocalizacaoGeolocator(),
         relatos: RelatosFirestore(),
         trechos: TrechosFirestore(),
+        presencas: PresencasFirestore(),
       );
 }

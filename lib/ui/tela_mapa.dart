@@ -24,6 +24,7 @@ import 'package:achar_vagas_app/ambiente.dart';
 import 'package:achar_vagas_app/config.dart';
 import 'package:achar_vagas_app/geo/geo_utils.dart';
 import 'package:achar_vagas_app/models/estado_trecho.dart';
+import 'package:achar_vagas_app/models/presenca.dart';
 import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
@@ -39,6 +40,9 @@ import 'package:latlong2/latlong.dart';
 
 /// Chave do marcador da posicao do usuario (usada nos testes de widget).
 const Key chaveMarcadorUsuario = Key('marcador-usuario');
+
+/// Chave da camada de marcadores de outros usuarios (issue #50).
+const Key chaveCamadaPresencas = Key('camada-presencas');
 
 /// Chave do botao que pede a permissao e centraliza no usuario.
 const Key chaveBotaoLocalizacao = Key('botao-localizacao');
@@ -69,8 +73,10 @@ class _TelaMapaState extends State<TelaMapa> {
       ValueNotifier<LayerHitResult<String>?>(null);
 
   StreamSubscription<List<Relato>>? _inscricaoRelatos;
+  StreamSubscription<List<Presenca>>? _inscricaoPresencas;
   StreamSubscription<LatLng>? _inscricaoPosicao;
   Timer? _relogio;
+  Timer? _timerPresenca;
 
   bool _mapaPronto = false;
   LatLng? _centroPendente;
@@ -80,6 +86,7 @@ class _TelaMapaState extends State<TelaMapa> {
   LatLng _centroConsulta = centroCampoMourao;
   List<Trecho> _trechos = const <Trecho>[];
   List<Relato> _relatos = const <Relato>[];
+  List<Presenca> _presencas = const <Presenca>[];
   List<TrechoEstado> _camadas = const <TrechoEstado>[];
   bool _gravando = false;
 
@@ -101,19 +108,33 @@ class _TelaMapaState extends State<TelaMapa> {
     _inscricaoPosicao = widget.ambiente.localizacao.acompanhar().listen((ponto) {
       if (!mounted) return;
       setState(() => _posicaoUsuario = ponto);
+      // Issue #50: quando o usuário se move o suficiente, reconsulta presenças.
+      if (distanciaM(_centroConsulta, ponto) >= passoRecargaMapaM) {
+        _observarPresencas(ponto);
+      }
     });
     // Sem evento novo, um relato vence sozinho depois de 20 min: o tique
     // recalcula as cores para o trecho voltar ao neutro.
     _relogio = Timer.periodic(const Duration(minutes: 1), (_) => _recalcular());
+    // Issue #50: anuncia a presença do usuário e observa as dos outros.
+    unawaited(_atualizarPresenca());
+    _observarPresencas(_centroConsulta);
+    // Reenvia a presença periodicamente (throttle interno do repositório evita
+    // gravações excessivas).
+    _timerPresenca = Timer.periodic(throttttePresencaMinimo, (_) {
+      if (_posicaoUsuario != null) unawaited(_atualizarPresenca());
+    });
   }
 
   @override
   void dispose() {
     _relogio?.cancel();
+    _timerPresenca?.cancel();
     _inscricaoRelatos?.cancel();
+    _inscricaoPresencas?.cancel();
     _inscricaoPosicao?.cancel();
-    _hitLinhas.dispose();
-    _hitCirculos.dispose();
+    // Remove a presença do usuário ao sair da tela (privacidade, issue #50).
+    unawaited(widget.ambiente.presencas.remover(widget.ambiente.uid));
     _controlador.dispose();
     super.dispose();
   }
@@ -140,6 +161,36 @@ class _TelaMapaState extends State<TelaMapa> {
     // Chegou leitura nova: o aviso de dados velhos sai (issue #29).
     _falhaRelatos = false;
     _recalcular();
+  }
+
+  /// Assina as presenças próximas do [centro].
+  void _observarPresencas(LatLng centro) {
+    _inscricaoPresencas?.cancel();
+    _inscricaoPresencas = widget.ambiente.presencas
+        .observarProximas(centro, raioM: raioPresencaPadraoM)
+        .listen(
+          _receberPresencas,
+          onError: (Object _) {
+            if (!mounted) return;
+          },
+        );
+  }
+
+  void _receberPresencas(List<Presenca> presencas) {
+    if (!mounted) return;
+    // Remove a própria presença da lista dos outros usuários.
+    _presencas = presencas.where((p) => p.uid != widget.ambiente.uid).toList();
+  }
+
+  /// Grava/atualiza a presença do próprio usuário (issue #50).
+  Future<void> _atualizarPresenca() async {
+    if (_posicaoUsuario == null) return;
+    await widget.ambiente.presencas.atualizar(
+      Presenca.novo(
+        uid: widget.ambiente.uid,
+        ponto: _posicaoUsuario!,
+      ),
+    );
   }
 
   /// Troca o centro de consulta quando o usuario se move o suficiente.
@@ -391,6 +442,24 @@ class _TelaMapaState extends State<TelaMapa> {
         ),
       );
 
+  /// Marcador de outro usuário no mapa (issue #50): ícone diferente do próprio.
+  Marker _marcadorPresenca(Presenca presenca) => Marker(
+        point: presenca.ponto,
+        width: 22,
+        height: 22,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF7B1FA2),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(color: Colors.black26, blurRadius: 3),
+            ],
+          ),
+          child: const Icon(Icons.person, size: 14, color: Colors.white),
+        ),
+      );
+
   /// Faixas de aviso sobre o mapa (issue #29): modo demonstracao e/ou leitura
   /// que falhou em tempo de execucao. Nenhuma delas e tela de erro: o mapa
   /// continua util, so nao da mais para dizer que as cores vem do banco.
@@ -480,6 +549,11 @@ class _TelaMapaState extends State<TelaMapa> {
                     if (_posicaoUsuario != null)
                       MarkerLayer(
                         markers: <Marker>[_marcadorUsuario(_posicaoUsuario!)],
+                      ),
+                    if (_presencas.isNotEmpty)
+                      MarkerLayer(
+                        key: chaveCamadaPresencas,
+                        markers: _presencas.map(_marcadorPresenca).toList(),
                       ),
                     RichAttributionWidget(
                       attributions: <SourceAttribution>[

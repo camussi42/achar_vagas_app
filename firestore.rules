@@ -47,6 +47,23 @@ service cloud.firestore {
 
       allow update, delete: if false;
     }
+
+    // Presença: cada usuário escreve apenas seu próprio documento.
+    // Outras pessoas leem para ver quem está próximo no mapa.
+    match /presenca/{uid} {
+      allow read: if request.auth != null;
+
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.geo is map
+        && request.resource.data.geo.geopoint is latlng
+        && request.resource.data.geo.geohashConsulta is string
+        // FieldValue.serverTimestamp(): o horário é sempre do servidor.
+        && request.resource.data.atualizadoEm == request.time;
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
   }
 }
 

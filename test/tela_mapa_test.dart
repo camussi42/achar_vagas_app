@@ -5,6 +5,7 @@ import 'package:achar_vagas_app/geo/trecho_id.dart';
 import 'package:achar_vagas_app/models/relato.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
+import 'package:achar_vagas_app/services/presencas_repository.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
 import 'package:achar_vagas_app/services/rota.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
@@ -51,6 +52,7 @@ void main() {
     required LocalizacaoService localizacao,
     RelatosRepository? relatos,
     TrechosRepository? trechos,
+    PresencasRepository? presencas,
     bool usandoFirebase = false,
     MotivoSemFirebase motivo = MotivoSemFirebase.naoConfigurado,
     RotaService rota = const RotaUrlLauncher(),
@@ -62,7 +64,7 @@ void main() {
         localizacao: localizacao,
         relatos: relatos ?? RelatosMemoria(),
         trechos: trechos ?? TrechosMemoria(),
-        rota: rota,
+        presencas: presencas ?? PresencasMemoria(),
       );
 
   Future<void> abrir(WidgetTester tester, AmbienteApp ambiente) async {

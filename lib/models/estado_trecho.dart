@@ -15,6 +15,11 @@ import 'package:achar_vagas_app/models/relato.dart';
 
 // validadeRelatoPadrao mora em models/relato.dart; aqui o prazo chega por parametro.
 
+/// Regra da issue #49: um relato "Estou saindo" que ja passou de
+/// [duracaoLiberando] (e ainda esta dentro da validade de 20 min) conta como
+/// "Com vaga" — quem chegou ao carro ja saiu.
+const Duration duracaoLiberando = Duration(minutes: 5);
+
 enum EstadoTrecho { vaga, lotado, saindo, desconhecido }
 
 extension EstadoTrechoTexto on EstadoTrecho {
@@ -53,7 +58,10 @@ class ResumoEstado {
 }
 
 /// Estado de um conjunto de relatos do **mesmo** trecho (ordem livre).
-ResumoEstado resumoDe(Iterable<Relato> relatos) {
+///
+/// [agora] e o relogio atual, necessario para aplicar a regra da issue #49:
+/// relato "saindo" com mais de [duracaoLiberando] conta como "Com vaga".
+ResumoEstado resumoDe(Iterable<Relato> relatos, {required DateTime agora}) {
   final lista = relatos.toList(growable: false);
   if (lista.isEmpty) return const ResumoEstado.desconhecido();
 
@@ -64,12 +72,17 @@ ResumoEstado resumoDe(Iterable<Relato> relatos) {
     });
   final maisRecente = ordenados.first;
 
+  final idadeRecente = agora.difference(maisRecente.criadoEm);
+  final estado = switch (maisRecente.tipo) {
+    TipoRelato.vaga => EstadoTrecho.vaga,
+    TipoRelato.lotado => EstadoTrecho.lotado,
+    // Issue #49: "Estou saindo" com mais de 5 min vira "Com vaga".
+    TipoRelato.saindo =>
+      idadeRecente > duracaoLiberando ? EstadoTrecho.vaga : EstadoTrecho.saindo,
+  };
+
   return ResumoEstado(
-    estado: switch (maisRecente.tipo) {
-      TipoRelato.vaga => EstadoTrecho.vaga,
-      TipoRelato.lotado => EstadoTrecho.lotado,
-      TipoRelato.saindo => EstadoTrecho.saindo,
-    },
+    estado: estado,
     total: lista.length,
     vagas: lista.where((r) => r.tipo == TipoRelato.vaga).length,
     lotados: lista.where((r) => r.tipo == TipoRelato.lotado).length,
@@ -90,6 +103,6 @@ Map<String, ResumoEstado> agregarPorTrecho(
     porTrecho.putIfAbsent(relato.trechoId.valor, () => []).add(relato);
   }
   return porTrecho.map(
-    (chave, lista) => MapEntry(chave, resumoDe(lista)),
+    (chave, lista) => MapEntry(chave, resumoDe(lista, agora: agora)),
   );
 }
