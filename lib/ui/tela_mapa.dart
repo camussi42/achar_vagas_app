@@ -30,6 +30,7 @@ import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
 import 'package:achar_vagas_app/ui/botoes_relato.dart';
 import 'package:achar_vagas_app/ui/camadas_mapa.dart';
+import 'package:achar_vagas_app/ui/detalhe_trecho.dart';
 import 'package:achar_vagas_app/ui/faixa_aviso.dart';
 import 'package:achar_vagas_app/ui/legenda_estado.dart';
 import 'package:achar_vagas_app/ui/paleta_estado.dart';
@@ -46,7 +47,7 @@ const Key chaveCamadaPresencas = Key('camada-presencas');
 /// Chave do botao que pede a permissao e centraliza no usuario.
 const Key chaveBotaoLocalizacao = Key('botao-localizacao');
 
-/// Chave da acao que abre as configuracoes no aviso de localizacao (#30).
+/// chave da acao que abre as configuracoes no aviso de localizacao.
 const Key chaveAbrirConfiguracoes = Key('abrir-configuracoes');
 
 class TelaMapa extends StatefulWidget {
@@ -64,6 +65,12 @@ class TelaMapa extends StatefulWidget {
 
 class _TelaMapaState extends State<TelaMapa> {
   final MapController _controlador = MapController();
+
+  /// hit test separado por camada: cada uma sobrescreve o proprio valor.
+  final LayerHitNotifier<String> _hitLinhas =
+      ValueNotifier<LayerHitResult<String>?>(null);
+  final LayerHitNotifier<String> _hitCirculos =
+      ValueNotifier<LayerHitResult<String>?>(null);
 
   StreamSubscription<List<Relato>>? _inscricaoRelatos;
   StreamSubscription<List<Presenca>>? _inscricaoPresencas;
@@ -95,10 +102,8 @@ class _TelaMapaState extends State<TelaMapa> {
     super.initState();
     _observarRelatos(_centroConsulta);
     unawaited(_carregarTrechos(_centroConsulta));
-    // #3: a permissao de localizacao e pedida ja na abertura (a implementacao
-    // nunca lanca: sem permissao/servico a resposta e `LocalizacaoIndisponivel`
-    // e o mapa fica no centro de Campo Mourao). O aviso fica para o botao de
-    // localizacao: na abertura a tela nao interrompe o usuario (issue #30).
+    // #3: na abertura a falha e silenciosa (mapa ja abre em campo mourao) e o
+    // aviso com correcao fica so para o botao de localizacao.
     unawaited(_irParaUsuario(inicial: true));
     _inscricaoPosicao = widget.ambiente.localizacao.acompanhar().listen((ponto) {
       if (!mounted) return;
@@ -237,11 +242,7 @@ class _TelaMapaState extends State<TelaMapa> {
     setState(() => _camadas = camadas);
   }
 
-  /// Pede a localizacao (e a permissao) e centraliza o mapa no usuario.
-  ///
-  /// Na abertura a falha e silenciosa (o mapa ja esta em Campo Mourao); pelo
-  /// botao de localizacao a tela explica o motivo e oferece o caminho de
-  /// correcao (issue #30).
+  /// pede a localizacao e centraliza; na abertura a falha e silenciosa.
   Future<void> _irParaUsuario({bool inicial = false}) async {
     final resultado = await widget.ambiente.localizacao.posicaoAtual();
     if (!mounted) return;
@@ -255,11 +256,7 @@ class _TelaMapaState extends State<TelaMapa> {
     }
   }
 
-  /// Explica por que a localizacao falhou e oferece o caminho de correcao.
-  ///
-  /// Cada motivo tem texto e atalho proprios (issue #30): permissao negada
-  /// (mesmo em definitivo) abre as configuracoes do app; GPS desligado abre as
-  /// configuracoes de localizacao do sistema; falha generica e so informativa.
+  /// aviso do motivo, com botao de correcao quando houver.
   void _avisarSemLocalizacao(MotivoLocalizacao motivo) {
     final aviso = switch (motivo) {
       MotivoLocalizacao.permissaoNegada => _AvisoLocalizacao(
@@ -327,12 +324,12 @@ class _TelaMapaState extends State<TelaMapa> {
     setState(() => _gravando = true);
     try {
       final resultado = await widget.ambiente.localizacao.posicaoAtual();
-      if (resultado is! LocalizacaoOk) {
-        // Mesmo caminho de correcao do botao de localizacao (issue #30).
-        _avisarSemLocalizacao(resultado.motivo);
+      if (resultado case LocalizacaoIndisponivel(:final motivo)) {
+        // mesmo aviso do botao de localizacao.
+        _avisarSemLocalizacao(motivo);
         return;
       }
-      final posicao = resultado.ponto;
+      final posicao = (resultado as LocalizacaoOk).ponto;
 
       final trecho = await widget.ambiente.resolvedor.resolver(posicao);
       if (trecho == null) {
@@ -364,7 +361,7 @@ class _TelaMapaState extends State<TelaMapa> {
       ? trecho.rotulo
       : 'área aproximada (${trecho.id.chave}) — via ainda não mapeada';
 
-  /// Mostra um aviso rapido; [acao] e o botao opcional do aviso (issue #30).
+  /// mostra um aviso rapido; [acao] e o botao opcional.
   void _avisar(String mensagem, {SnackBarAction? acao}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -372,32 +369,61 @@ class _TelaMapaState extends State<TelaMapa> {
       ..showSnackBar(SnackBar(content: Text(mensagem), action: acao));
   }
 
-  /// Trechos canonicos com relato viram linha (regra 1 da #13).
-  List<Polyline<Object>> _polylines() => <Polyline<Object>>[
+  /// trechos canonicos com relato viram linha; hitValue e o id do trecho.
+  List<Polyline<String>> _polylines() => <Polyline<String>>[
         for (final camada in _camadas)
           if (camada.temLinha)
-            Polyline<Object>(
+            Polyline<String>(
               points: camada.linha,
               color: corDeEstado(camada.estado),
               strokeWidth: 6,
               borderColor: Colors.black.withValues(alpha: 0.35),
               borderStrokeWidth: 1,
+              hitValue: camada.id.valor,
             ),
       ];
 
   /// Fallback geohash (e trecho sem geometria) viram circulo (regras 2 e 3).
-  List<CircleMarker<Object>> _circles() => <CircleMarker<Object>>[
+  List<CircleMarker<String>> _circles() => <CircleMarker<String>>[
         for (final camada in _camadas)
           if (!camada.temLinha)
-            CircleMarker<Object>(
+            CircleMarker<String>(
               point: camada.centro,
               radius: camada.raioM,
               useRadiusInMeter: true,
               color: corDeEstado(camada.estado).withValues(alpha: 0.45),
               borderColor: corDeEstado(camada.estado),
               borderStrokeWidth: 2,
+              hitValue: camada.id.valor,
             ),
       ];
+
+  /// abre o detalhe do trecho tocado, a partir do hit test da camada.
+  void _abrirDetalheDe(LayerHitNotifier<String> hit) {
+    final camada =
+        trechoTocado(_camadas, hit.value?.hitValues ?? const <String>[]);
+    if (camada == null) return;
+    unawaited(
+      mostrarDetalheTrecho(
+        context,
+        camada: camada,
+        agora: DateTime.now().toUtc(),
+        onIrAteAqui: () => unawaited(_irAteOTrecho(camada)),
+      ),
+    );
+  }
+
+  /// Abre a rota ate o trecho (issue #27); destino e o ponto que a camada ja
+  /// tem (centroide da linha ou centro do circulo do fallback).
+  Future<void> _irAteOTrecho(TrechoEstado camada) async {
+    final abriu = await widget.ambiente.rota.abrir(
+      camada.centro,
+      rotulo: camada.via ?? camada.rotulo,
+    );
+    if (!abriu) {
+      _avisar('Nenhum app de mapas disponível para abrir a rota.');
+    }
+  }
 
   Marker _marcadorUsuario(LatLng ponto) => Marker(
         point: ponto,
@@ -504,10 +530,21 @@ class _TelaMapaState extends State<TelaMapa> {
                       // que carregou (o modo demonstracao roda muito sem rede).
                       errorTileCallback: (tile, erro, pilha) {},
                     ),
-                    PolylineLayer(polylines: _polylines()),
-                    CircleLayer(
-                      circles: _circles(),
-                      optimizeRadiusInMeters: true,
+                    // hitNotifier so acerta trecho tocado: toque vazio nao abre.
+                    GestureDetector(
+                      onTap: () => _abrirDetalheDe(_hitLinhas),
+                      child: PolylineLayer<String>(
+                        polylines: _polylines(),
+                        hitNotifier: _hitLinhas,
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => _abrirDetalheDe(_hitCirculos),
+                      child: CircleLayer<String>(
+                        circles: _circles(),
+                        hitNotifier: _hitCirculos,
+                        optimizeRadiusInMeters: true,
+                      ),
                     ),
                     if (_posicaoUsuario != null)
                       MarkerLayer(
@@ -558,8 +595,7 @@ class _TelaMapaState extends State<TelaMapa> {
   }
 }
 
-/// Aviso de localizacao indisponivel: o texto e, quando houver, o botao que
-/// leva o usuario ao ajuste certo (issue #30).
+/// aviso de localizacao indisponivel: texto e, quando houver, botao de ajuste.
 class _AvisoLocalizacao {
   const _AvisoLocalizacao({
     required this.texto,
@@ -569,9 +605,9 @@ class _AvisoLocalizacao {
 
   final String texto;
 
-  /// Rotulo do botao; obrigatorio quando [abrirConfiguracoes] existe.
+  /// rotulo do botao; obrigatorio quando [abrirConfiguracoes] existe.
   final String? rotuloAcao;
 
-  /// O que o botao faz: abrir as configuracoes do app ou do sistema.
+  /// o que o botao faz: config do app ou do sistema.
   final Future<void> Function()? abrirConfiguracoes;
 }

@@ -194,4 +194,41 @@ void main() {
       expect(pontos, isEmpty);
     });
   });
+
+  group('trechoTocado', () {
+    TrechoEstado camada(String valor) => TrechoEstado(
+          id: TrechoId.parse(valor),
+          resumo: const ResumoEstado(estado: EstadoTrecho.vaga, total: 1),
+          centro: ponto,
+        );
+
+    test('devolve o trecho do id tocado', () {
+      final alvo = camada(idCanonico);
+
+      expect(
+        trechoTocado(<TrechoEstado>[alvo], <String>[idCanonico]),
+        same(alvo),
+      );
+    });
+
+    test('ignora id desconhecido e cai no proximo do hit test', () {
+      final alvo = camada(idFallback);
+
+      expect(
+        trechoTocado(
+          <TrechoEstado>[camada(idCanonico), alvo],
+          <String>['gers:08628d5437ffffff0473ffc36df547db', idFallback],
+        ),
+        same(alvo),
+      );
+    });
+
+    test('sem id conhecido nao devolve nada', () {
+      final camadas = <TrechoEstado>[camada(idCanonico)];
+
+      expect(trechoTocado(camadas, <String>[idFallback]), isNull);
+      expect(trechoTocado(camadas, const <String>[]), isNull);
+      expect(trechoTocado(const <TrechoEstado>[], <String>[idCanonico]), isNull);
+    });
+  });
 }

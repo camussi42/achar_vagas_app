@@ -46,5 +46,11 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- rota ate o trecho (issue #27): android 11+ so enxerga apps
+             declarados aqui, entao o esquema `geo:` precisa desta query. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="geo"/>
+        </intent>
     </queries>
 </manifest>
