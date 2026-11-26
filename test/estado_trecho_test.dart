@@ -33,7 +33,7 @@ void main() {
 
   group('resumoDe', () {
     test('sem relato o trecho fica desconhecido', () {
-      final resumo = resumoDe(const <Relato>[]);
+      final resumo = resumoDe(const <Relato>[], agora: agora);
 
       expect(resumo.estado, EstadoTrecho.desconhecido);
       expect(resumo.temRelato, isFalse);
@@ -45,7 +45,7 @@ void main() {
         relato(TipoRelato.vaga, const Duration(minutes: 12)),
         relato(TipoRelato.lotado, const Duration(minutes: 1), uid: 'u2'),
         relato(TipoRelato.saindo, const Duration(minutes: 4), uid: 'u3'),
-      ]);
+      ], agora: agora);
 
       expect(resumo.estado, EstadoTrecho.lotado);
       expect(resumo.total, 3);
@@ -61,14 +61,50 @@ void main() {
       final vagaPrimeiro = resumoDe(<Relato>[
         relato(TipoRelato.vaga, Duration.zero, quando: mesmoHorario),
         relato(TipoRelato.saindo, Duration.zero, uid: 'u2', quando: mesmoHorario),
-      ]);
+      ], agora: agora);
       final saindoPrimeiro = resumoDe(<Relato>[
         relato(TipoRelato.saindo, Duration.zero, quando: mesmoHorario),
         relato(TipoRelato.vaga, Duration.zero, uid: 'u2', quando: mesmoHorario),
-      ]);
+      ], agora: agora);
 
       expect(vagaPrimeiro.estado, EstadoTrecho.vaga);
       expect(saindoPrimeiro.estado, EstadoTrecho.vaga);
+    });
+
+    // Issue #49: relato "Estou saindo" com ate 5 min aparece "Liberando vaga".
+    test('saindo com ate 5 min fica liberando vaga', () {
+      final resumo = resumoDe(<Relato>[
+        relato(TipoRelato.saindo, const Duration(minutes: 4)),
+      ], agora: agora);
+
+      expect(resumo.estado, EstadoTrecho.saindo);
+    });
+
+    // Issue #49: o mesmo relato com mais de 5 min (e menos de 20) vira "Com vaga".
+    test('saindo com mais de 5 min vira vaga', () {
+      final resumo = resumoDe(<Relato>[
+        relato(TipoRelato.saindo, const Duration(minutes: 6)),
+      ], agora: agora);
+
+      expect(resumo.estado, EstadoTrecho.vaga);
+    });
+
+    // Issue #49: exatamente 5 min ainda e "saindo" (so depois dos 5 min vira vaga).
+    test('saindo com exatamente 5 min ainda fica liberando vaga', () {
+      final resumo = resumoDe(<Relato>[
+        relato(TipoRelato.saindo, const Duration(minutes: 5)),
+      ], agora: agora);
+
+      expect(resumo.estado, EstadoTrecho.saindo);
+    });
+
+    // Issue #49: saindo com 19 min (dentro da validade de 20) vira vaga.
+    test('saindo com 19 min vira vaga', () {
+      final resumo = resumoDe(<Relato>[
+        relato(TipoRelato.saindo, const Duration(minutes: 19)),
+      ], agora: agora);
+
+      expect(resumo.estado, EstadoTrecho.vaga);
     });
   });
 

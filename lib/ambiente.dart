@@ -11,6 +11,7 @@ import 'package:achar_vagas_app/geo/resolver_overture.dart';
 import 'package:achar_vagas_app/geo/trecho_resolver.dart';
 import 'package:achar_vagas_app/models/trecho.dart';
 import 'package:achar_vagas_app/services/localizacao.dart';
+import 'package:achar_vagas_app/services/presencas_repository.dart';
 import 'package:achar_vagas_app/services/relatos_repository.dart';
 import 'package:achar_vagas_app/services/trechos_repository.dart';
 
@@ -49,6 +50,7 @@ class AmbienteApp {
     required this.localizacao,
     required this.relatos,
     required this.trechos,
+    required this.presencas,
     this.motivoSemFirebase,
   });
 
@@ -64,6 +66,7 @@ class AmbienteApp {
   final LocalizacaoService localizacao;
   final RelatosRepository relatos;
   final TrechosRepository trechos;
+  final PresencasRepository presencas;
 
   /// Cascata da issue #12: trecho canonico (Overture/GERS) e, quando nao ha
   /// malha importada para o ponto, a area aproximada por geohash.
@@ -87,6 +90,7 @@ class AmbienteApp {
         localizacao: const LocalizacaoGeolocator(),
         relatos: RelatosMemoria(),
         trechos: TrechosMemoria(trechosDemoGerado.map(Trecho.fromMap)),
+        presencas: PresencasMemoria(),
       );
 
   /// Modo Firebase: relatos e trechos ao vivo no Firestore.
@@ -96,5 +100,6 @@ class AmbienteApp {
         localizacao: const LocalizacaoGeolocator(),
         relatos: RelatosFirestore(),
         trechos: TrechosFirestore(),
+        presencas: PresencasFirestore(),
       );
 }
